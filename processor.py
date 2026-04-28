@@ -1,0 +1,390 @@
+import logging
+import base64
+import asyncio
+import httpx
+from typing import Dict, Any, Optional, Callable, Awaitable, List
+from pathlib import Path
+
+# 内部引用
+from .context_extractor import MarkdownContextExtractor
+from .json_utils import robust_json_parse
+from .image_utils import create_image_resolver
+from . import prompts
+from .markdown_utils import format_as_collapsible_block
+
+logger = logging.getLogger("another_ec.processor")
+
+# 本地 OpenAI 兼容服务需要的占位 API Key
+LOCAL_API_KEY = "no-api-key"
+
+SILICONFLOW_API_KEY ="YOUR_API_KEY" 
+
+# 当前使用的视觉模型
+LOCAL_VLM_MODEL = "Qwen/Qwen3-VL-8B-Instruct"
+REMOTE_VLM_MODEL = "Qwen/Qwen3-VL-8B-Instruct"
+
+
+class MarkdownMultimodalProcessor:
+    """
+    Markdown 多模态处理器 (功能完备版)
+    能够自动扫描并处理 Markdown 文档中的所有多模态元素。
+    """
+
+    def __init__(
+        self, 
+        vlm_func: Callable[[str, str, Optional[str]], Awaitable[str]],
+        context_extractor: Optional[MarkdownContextExtractor] = None,
+        caption_mode: str = "detailed"  # 支持 "detailed" (适合 GraphRAG) 或 "concise" (适合传统 RAG)
+    ):
+        self.vlm_func = vlm_func
+        self.extractor = context_extractor or MarkdownContextExtractor()
+        self.caption_mode = caption_mode
+
+    async def process_document(
+        self, 
+        md_content: str, 
+        image_resolver: Callable[[str], bytes] = None,
+        base_dir: str | Path = "."
+    ) -> List[Dict[str, Any]]:
+        """
+        自动扫描并处理 Markdown 中的所有多模态元素（图片和表格）
+        """
+        if image_resolver is None:
+            image_resolver = create_image_resolver(base_dir)
+
+        tokens = self.extractor.md.parse(md_content)
+        results = []
+
+        for i, token in enumerate(tokens):
+            # 1. 处理图片 (Inline 里的 Image)
+            if token.type == "inline" and token.children:
+                for child in token.children:
+                    if child.type == "image":
+                        img_url = child.attrGet("src")
+                        img_bytes = image_resolver(img_url) if image_resolver else None
+                        
+                        if img_bytes:
+                            res = await self.process_image_in_markdown(md_content, img_url, img_bytes)
+                            results.append({"type": "image", "data": res})
+                        else:
+                            logger.warning(f"Could not resolve bytes for image: {img_url}")
+
+            # 2. 处理表格 (markdown-it 的 table_open)
+            if token.type == "table_open":
+                if token.map:
+                    lines = md_content.splitlines()
+                    table_md = "\n".join(lines[token.map[0]:token.map[1]])
+                    res = await self.process_table_in_markdown(md_content, table_md)
+                    results.append({"type": "table", "data": res})
+
+        return results
+
+    async def process_image_in_markdown(
+        self, 
+        md_content: str, 
+        image_url: str, 
+        image_bytes: bytes,
+        entity_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """处理单张图片"""
+        context = self.extractor.extract_context(md_content, image_url)
+        
+        # 3. 选择模板并格式化
+        if self.caption_mode == "concise":
+            if context:
+                user_prompt = prompts.VISION_PROMPT_CONCISE_WITH_CONTEXT.format(
+                    context=context,
+                    entity_name=entity_name or Path(image_url).stem,
+                    image_path=image_url
+                )
+            else:
+                user_prompt = prompts.VISION_PROMPT_CONCISE.format(
+                    entity_name=entity_name or Path(image_url).stem,
+                    image_path=image_url
+                )
+        else:
+            if context:
+                user_prompt = prompts.VISION_PROMPT_WITH_CONTEXT.format(
+                    context=context,
+                    entity_name=entity_name or Path(image_url).stem,
+                    image_path=image_url
+                )
+            else:
+                user_prompt = prompts.VISION_PROMPT.format(
+                    entity_name=entity_name or Path(image_url).stem,
+                    image_path=image_url
+                )
+
+        image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+
+        try:
+            logger.debug(f"Calling VLM for {image_url}. Prompt len: {len(user_prompt)}")
+            
+            raw_response = await self.vlm_func(
+                user_prompt, 
+                prompts.IMAGE_ANALYSIS_SYSTEM, 
+                image_base64
+            )
+            
+            result = robust_json_parse(raw_response)
+            
+            # 强化防御性检查
+            if isinstance(result, list):
+                result = result[0] if len(result) > 0 else {}
+            if not isinstance(result, dict):
+                result = {}
+            
+            return {
+                "url": image_url,
+                "enhanced_caption": result.get("detailed_description", ""),
+                "entity_info": result.get("entity_info", {}),
+                "context_used": context,
+                "success": True
+            }
+        except Exception as e:
+            logger.error(f"VLM call failed for {image_url}: {e}")
+            return {"url": image_url, "success": False, "error": str(e)}
+
+    async def process_table_in_markdown(
+        self,
+        md_content: str,
+        table_markdown: str,
+        entity_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """处理单个表格"""
+        user_prompt = prompts.TABLE_PROMPT.format(
+            entity_name=entity_name or "table_entity",
+            table_body=table_markdown
+        )
+
+        try:
+            raw_response = await self.vlm_func(user_prompt, prompts.TABLE_ANALYSIS_SYSTEM, None)
+            result = robust_json_parse(raw_response)
+            
+            if isinstance(result, list):
+                result = result[0] if len(result) > 0 else {}
+            if not isinstance(result, dict):
+                result = {}
+
+            return {
+                "enhanced_caption": result.get("detailed_description", ""),
+                "entity_info": result.get("entity_info", {}),
+                "success": True
+            }
+        except Exception as e:
+            logger.error(f"Table analysis failed: {e}")
+            return {"success": False, "error": str(e)}
+
+async def vlm_call_local_qwen(prompt: str, system_prompt: str, image_base64: Optional[str] = None) -> str:
+    """
+    本地 Qwen VLM 接口调用实现 (OpenAI 兼容)
+    """
+    url = "https://api.siliconflow.cn/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {SILICONFLOW_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    content = [{"type": "text", "text": prompt}]
+    if image_base64:
+        content.append({
+            "type": "image_url",
+            "image_url": {
+                "url": f"data:image/jpeg;base64,{image_base64}"
+            }
+        })
+    
+    payload = {
+        "model": REMOTE_VLM_MODEL,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": content}
+        ],
+        "stream": False,
+        "max_tokens": 2048,
+        "temperature": 0.2,
+        "response_format": {"type": "json_object"}
+    }
+
+    async with httpx.AsyncClient() as client:
+        try:
+            # 增加超时到 300 秒
+            resp = await client.post(url, json=payload, headers=headers, timeout=300)
+            if resp.status_code != 200:
+                logger.error(f"SiliconFlow API Error ({resp.status_code}): {resp.text}")
+            resp.raise_for_status()
+            return resp.json()["choices"][0]["message"]["content"]
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Local Qwen API HTTP Error: {e.response.status_code} - {e.response.text}")
+            raise
+        except Exception as e:
+            logger.error(f"Local Qwen API Error ({type(e).__name__}): {e}")
+            raise
+
+async def main():
+    test_md = r"""# “指月之指”何以观月？——大语言模型分词原理科普
+
+## 一、引言：由“词元”引发的一系列疑问
+
+近日，全国科学技术名词审定委员会为AI领域的核心概念**Token**敲定了一个颇具古典韵味的中文译名——**“词元”**。
+
+随着大语言模型深度融入日常工作与生活，这个技术术语步入了大众视野。无论是购买大模型 API 额度，亦或是使用openclaw的时候精打细算，Token都是绕不开的关键词。
+
+当这个概念真正下沉到日常讨论中时，许多非技术背景的朋友乃至刚接触 AI 应用开发的从业者脑海中都会浮现出一系列疑问：
+
+- Token 是可数名词还是不可数名词？
+- Token 代表的是什么？
+- 我该怎么换算token和字符的数量？听说 1 个 Token 约等于 0.75 个汉字字符？
+- “长恨春归无觅处，不知转入此中来”——这句话喂给大模型，会被切成几个 Token？
+- 同一段话在不同模型的分词器里切出的Token数量迥异，那随着技术迭代，一些高频固定短语（比如 ASAP、十动然拒、喜大普奔）会不会被直接浓缩成 1 个 Token？
+- 我们在对话框里敲下的那串字符，究竟是如何映射到机器内部那个庞大而隐秘的词表中的？
+
+对于非从业者，这些问题都是很好的切入点。他们像一把把精巧的手术刀，可以帮我们精准地剖开大语言模型的底层逻辑。
+
+要回答它们，仅靠“Token 就是字词片段”这类粗浅的解释远远不够。今天，我们就来窥探Token内部的逻辑，看看AI是如何使用token这个**指月之指**看到头顶的明月。
+
+
+## 二、纠正误区：“指月之指”——Token 的真面目
+
+### Token就是可数名词
+首先，让我们简单直接地回答第一个问题：Token 毫无疑问是**可数名词**。
+
+在人类的感性认识中，语言如同绵延不绝的河流，我们总是说一个人写的文章行云流水，讲话口若悬河。但在 AI 的世界里，文本绝不是不可数的水流。人类听音乐，感受到的是连绵的旋律；但乐器知道的只有离散的音符，正如大模型眼里没有流淌的语言，只有一排等待被依次激活的 Token。这是一个有严密前后关系的离散序列。大模型无论阅读还是写作，都在以 Token 为最小单元，一拍一拍地拼接、吞吐。
+
+### Token 是什么？——指月之指
+但这里潜藏着一个极易让人落入的陷阱：由于常见的 Token 可视化总会将一句话用五颜六色的色块加以区分，**人们很容易误以为 Token 就是那些被切碎的“字”或“词”本身。**
+
+实则不然。借用禅宗哲学中的一个典故来形容——**Token 是“指月之指”，绝非明月本身。它是能指**
+
+>佛陀对阿难开示：“如人以手指月示人，彼人因指，当应看月。若复观指，以为月体，此人岂唯亡失月轮，亦亡其指。”意思是：若只盯着手指而忘了看月，不仅错过月亮，也误解了手指的意义。
+
+
+![指月之指](https://fastly.jsdelivr.net/gh/bucketio/img18@main/2026/04/21/1776759169089-d3378fc4-0239-4bcc-bde5-7baf73c9d909.png)
+
+
+明月是什么？明月是自然语言中真实的语义单元——比如“苹果”这个词，以及其背后所承载的红彤彤的果实与香甜的滋味。然而，大语言模型永远看不到那轮真实的月亮。它只能通过 Token 这跟手指，在高维向量空间中，找到一轮月亮的投影——那便是Embedding。所以，**Token 本质上只是一个冷冰冰的整数 ID**（底层或许就是 [18990, 4251] 这样一串数字），他只是一个目录中的页码，指向高维向量中间中的一个点，这个点及时一个词的语义投影。
+
+
+![Token其实指向的是个向量](https://fastly.jsdelivr.net/gh/bucketio/img0@main/2026/04/21/1776781966295-c406da11-ad04-4ec4-8335-2ad426b1c225.png)
+
+
+当我们讨论一个词被切成了几个 Token 时，实际上是在讨论用了几根“手指”去引导你看遍整片夜空（也就是完整的句子）。若把注意力全放在手指的粗细长短上，便会错失它所指向的浩瀚星空。
+
+### 一个Token约等于0.75个汉字吗?
+理解了 Token 只是底层的一串“索引”，我们便能顺势破除另一个广为流传的迷信：**“1 个 Token 约等于 0.75 个汉字，或 4 个英文字符？”**
+
+这条经验法则确实存在，并在早期大模型的官方文档中被反复引用。但它本质上是一个带有强烈的“英文中心主义”色彩。原因在于，早期主流大模型几乎都是在海量纯英文语料中耳濡目染的，其底层字典（词表）为英文量身定制，因此一个常见的英文单词大概率能在字典中直接找到对应的Token，从而推演出上述比例。
+
+**然而，即使对于同一个大语言模型，这一换算公式对中文也完全失效。** 中文是表意文字，信息密度极高。在那些对中文极不友好的早期模型眼里，一个方方正正的汉字非但无法浓缩，反而会被“大卸八块”。但是随着模型词表的扩充，以及国产大模型的兴起，各类模型已经能非常好地对句子进行有效地分词。
+
+其实，**不管是汉语还是英语，字符的数量和Token数量无法简单用一个系数表示**，我们后面会详细讲述。
+![GPT把15个字符被切成了34个Token](https://fastly.jsdelivr.net/gh/bucketio/img14@main/2026/04/20/1776694156423-ebeb36da-194e-487b-a883-f0ee9ffd25bb.png)
+
+![deepseek能更好保留完整中文词语](https://fastly.jsdelivr.net/gh/bucketio/img9@main/2026/04/20/1776697119432-f1b5894d-eb0c-4302-b64b-32eb399ff6a5.png)
+
+
+## 三、查字典与拼碎纸：AI 是如何“认字”的？
+
+既然不能生搬硬套换算比例计算Token数量，那么当我们把一段提示词输入对话框时，机器究竟是如何将其转化为 Token 的？这个过程，本质上是一场“查字典 + 动态拼图”的贪心匹配博弈。
+
+想象一下，分词器手中捧着一本模型在出厂前就日夜背诵的厚重“字典”（子词表）。当我们输入一句中文时，分词器宛如一位极度追求效率的检字员，拿着这串字符去字典里逐一匹配。
+
+它采用“由长至短”的贪心策略。让我们用一个经典案例来演示——“南京市长江大桥”。
+
+方式一：南京市 / 长江 / 大桥
+方式二：南京 / 市长 / 江大桥
+分词器没有人类的语法知识和常识，它只会机械地执行“由长至短”的查表匹配。
+
+它会先看看字典里有没有“南京市长江大桥”这个整句，这大概率没有。那有没有“南京市”？如果有，切下来。剩下的“长江大桥”继续查——有没有“长江大桥”？如果有，作为一个整体切下。于是得到：[南京市] [长江大桥]。
+
+但如果字典里没有“南京市”，却有“南京”，它就会切下“南京”；然后看剩下的“市长”——有，切下；最后是“江大桥”——如果字典里没收这个词，它可能会被进一步切分成“江”和“大桥”或者更碎的子词。于是得到：[南京] [市长] [江] [大桥]。
+
+同样的七个字，仅仅因为字典收录情况不同，就可能被切成截然不同的 Token 序列。 而不同的切分方式，将直接决定模型如何“理解”这句话——它到底是一座桥，还是一个人？
+
+这就是为什么分词器的词表质量如此重要。如果这本字典足够丰富、足够懂中文，切词的过程就会行云流水，最大程度保留原意。
+
+
+## 四、“庄周梦蝶”与 ASAP：词表里的高维压缩包
+
+### 与时俱进——词表的扩充
+
+现代大模型的词表是如何进化的？这便不得不提及构建词表的核心算法——以 BPE（字节对编码）为代表。
+
+我们可以将词表构建过程视为一场基于统计学的“炼丹”。面对互联网上浩如烟海的真实语料，算法起初只是一个只认识基础字符的“文盲”。但它像一台不知疲倦的扫描仪，疯狂统计字符组合的共现频率。当发现“A”“S”“A”“P”这四个字母总是在一起出现，它便可能会将它们合并，在字典中铸就一个全新的专属 Token指向“ASAP”。同理，“B”“T”“W”也可能会被熔炼为一个独立的 Token。这就像是那些在互联网上流行的新造词语，随着被大众广泛使用，后续也就会被放到新华词典或者牛津词典里。
+
+这也就直接回应了前文的问题：**随着训练语料的积淀，那些极高频的固定用法、短语乃至特定代码片段，都会被浓缩为单个 Token。** 即使GPT-5.x这种英文语料为主的模型眼中，“南京”早已不再是两个孤立的汉字，而是一个浑然一体的语义单元。作为中文大语言模型的佼佼者，deepseek甚至都把“科学发展观”作为了一个独立的Token🫡 
+
+![现在的GPT终于知道“南京”是一个词了](https://fastly.jsdelivr.net/gh/bucketio/img5@main/2026/04/20/1776695278873-aee9336f-8169-4540-bdec-fee0f5c4461b.png)
+
+![科学发展观确实引领了AI发展](https://fastly.jsdelivr.net/gh/bucketio/img15@main/2026/04/21/1776782690332-c4a122d3-a9f1-48f9-a60f-7dc6eb6d882e.png)
+
+
+### 大语言模型也爱用成语
+若将这种“高频合并”的逻辑进一步放大，我们会发现一个绝妙的跨时空呼应：在中文语境中，Token 词表的扩充，恰似古人发明**成语**的过程。
+
+某种意义上说，**成语便是古人手动发明的“人类语言 BPE 算法”。**
+
+以“庄周梦蝶”为例。若不用成语，我们需要用冗长的自然语言去描述这一概念：“究竟是我做梦化作了蝴蝶，还是蝴蝶做梦化作了我的形骸？真实与虚幻的边界究竟何在？”这背后是一大段关于存在主义的艰深哲思。
+
+但在中文的实际运用中，仅需四字足矣。**这个成语本身，便等同于一个表征多字子词的 Token。**
+
+当现代大模型通过扩充词表将“庄周梦蝶”直接作为独立 Token 收入囊中时，意味着它仅凭 **1 个 Token 的物理存储空间（一个整数 ID）**，便在底层调用了囊括数十上百字释义的“高维语义压缩包”。
+
+这不但节省了 Token 的消耗，更使机器在理解人类微妙而深邃的文化概念时，实现了“降维打击”般的效率跃升。由此观之，Token 化绝非简单的分词断句，其本质是一种**语义层面的无损压缩**。
+
+## 五、大厂的算盘：为什么新模型的 Token 越用越少？上下文窗口越来越长
+
+若你时常穿梭于不同 AI 大模型之间，定会发现一个耐人寻味的现象：输入同样一段上千字的中文文本，早期模型消耗的 Token 数量惊人；而若将其喂给优秀的国产模型或采用全新词表的最新版模型，Token 消耗量可能锐减一半以上。
+
+各大 AI 厂商为何不遗余力地扩充多语言词表，让模型消耗的 Token“越用越少”？这不妨类比**人类学习语言的过程**。
+
+在识字的启蒙阶段，大脑只能逐字逐词地理解与表达，说话费时费力；待我们逐渐掌握大量“成语”、“典故”和“固定搭配”后，原本需要长篇大论方能描摹的复杂情境，现在寥寥数语便可精准传达。
+
+厂商扩充大模型词表的过程，本质上就是让 AI 跨越“识单字”的初级阶段，迈入像成年人一样娴熟运用“成语”的更高境界。将高频词汇打包成单个 Token，带来了极为可观的工程收益。
+
+不妨算一笔直观的账：
+
+- 若在旧版分词器中，1 个汉字平均被切分为 2 个 Token，那么 12.8 万个 Token 的物理窗口，实际最多只能容纳 **6.4 万**个汉字。
+- 而在优化后的新版词表中，大量高频词汇被打包压缩，若 1 个汉字平均仅需 0.6 个 Token，那么同样 12.8 万个 Token 的窗口，模型便可一口气吞下近 **21 万**字的超长文本！
+
+一个高效的 Tokenizer 无异于给文本施加了一道“无损压缩”。同等的 Token 额度，你能塞进更长、更完整的故事背景与长篇资料，从而在无形中使大模型的长文本处理能力实现倍增。
+
+## 六、结语：理解 Token，就是理解 AI 的底层逻辑
+
+回望文章开头提出的那些问题，答案已然不言自明。
+
+Token 绝不仅仅是文档中枯燥的计算单位，或是大厂用以扣除账户余额的计费标尺。它是大语言模型观察、拆解并重构人类世界的“最小像素”。
+
+从早期如同稚子般将我们精妙的汉字摔成毫无意义的底层字节，到如今宛如深谙语言精髓的智者，用高度凝练的 Token 将“庄周梦蝶”这样的文化基因压缩封装——Token 分词技术的演进史，本身就是一部硅基生命努力读懂碳基文明的进化史。
+
+我们始终要记住的是：Token 不过是那根**指月之指**。
+
+>见指忘月，是为迷；因指见月，方为悟
+
+它在底层永远只是一串冷冰冰的数字 ID，但这些数字所指向的，却是人类语言和文化中积淀的浩瀚星河。各大厂商不遗余力地扩充词表、优化分词器，本质都是在竭力让这根“手指”更为精准，以便它指向更大、更圆满的“月亮”。"""
+    
+    base_dir = Path(".")
+    processor = MarkdownMultimodalProcessor(vlm_func=vlm_call_local_qwen)
+    
+    print(f">>> 开始处理文档: example.md (直接写入)")
+    print(f">>> 基础目录: {base_dir}")
+    
+    try:
+        results = await processor.process_document(test_md, base_dir=base_dir)
+        # import json
+        # print("\n>>> 处理完成，结果如下:")
+        # print(json.dumps(results, indent=2, ensure_ascii=False))
+        md_blocks = [
+            format_as_collapsible_block(item.get("data", {}))
+            for item in results
+            if isinstance(item, dict)
+        ]
+        md = "\n".join(block for block in md_blocks if block)
+        print(md)
+    except Exception as e:
+        import traceback
+        print(f"\n>>> 处理过程中发生错误: {e}")
+        traceback.print_exc()
+
+if __name__ == "__main__":
+    asyncio.run(main())
