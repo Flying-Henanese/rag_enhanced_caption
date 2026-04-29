@@ -1,8 +1,6 @@
 import asyncio
 import os
 import sys
-import httpx
-import base64
 from pathlib import Path
 
 # --- 1. 动态加载环境配置 ---
@@ -16,59 +14,12 @@ try:
 except ImportError:
     print("[Warning] python-dotenv 未安装，将回退为使用系统环境变量或默认值。")
 
-# 从环境变量获取配置，如果未设置则使用默认值
-API_KEY = os.getenv("VLM_API_KEY", "no-api-key")
-ENDPOINT = os.getenv("VLM_ENDPOINT", "http://127.0.0.1:8000/v1/chat/completions")
-MODEL_NAME = os.getenv("VLM_MODEL_NAME", "default-model")
-
 # --- 2. 解决模块导入问题 ---
 # 为了解决直接运行时的 ImportError: No module named 'rag_enhanced_caption'
 # 我们动态将项目根目录加入 sys.path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from rag_enhanced_caption import MarkdownMultimodalProcessor
-
-
-# --- 3. 真实请求流程 ---
-
-# 真实的 VLM 调用函数
-async def vlm_call(user_prompt: str, system_prompt: str, image_base64: str = None, image_bytes: bytes = None) -> str:
-    print(f"\n[VLM Request]")
-    print(f"👉 Target Endpoint: {ENDPOINT}")
-    print(f"👉 Target Model: {MODEL_NAME}")
-    
-    headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json"
-    }
-    
-    messages = [
-        {"role": "system", "content": system_prompt}
-    ]
-    
-    user_content = [{"type": "text", "text": user_prompt}]
-    if image_base64:
-        # 假设图片为 jpeg 格式，如果是 png 等可以根据实际情况调整或动态判断
-        user_content.append({
-            "type": "image_url",
-            "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}
-        })
-    
-    messages.append({"role": "user", "content": user_content})
-    
-    payload = {
-        "model": MODEL_NAME,
-        "messages": messages,
-        "temperature": 0.2
-    }
-    
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        response = await client.post(ENDPOINT, headers=headers, json=payload)
-        response.raise_for_status()
-        result = response.json()
-        return result["choices"][0]["message"]["content"]
-
-# 真实的图片解析器，通过 URL 下载图片并返回字节流
+from rag_enhanced_caption import MarkdownMultimodalProcessor, create_default_vlm_client
 
 async def run_test():
     # 构造一个包含图表和上下文的测试 Markdown
@@ -215,10 +166,14 @@ Token 绝不仅仅是文档中枯燥的计算单位，或是大厂用以扣除�
     
     print("\n=== 开始测试 MarkdownMultimodalProcessor ===\n")
     
-    # 初始化 Processor
-    processor = MarkdownMultimodalProcessor(vlm_func=vlm_call)
+    # 1. 使用内置的默认 VLM 客户端
+    # 它会自动读取环境变量：VLM_API_KEY, VLM_ENDPOINT, VLM_MODEL_NAME
+    vlm_client = create_default_vlm_client()
+
+    # 2. 初始化 Processor
+    processor = MarkdownMultimodalProcessor(vlm_func=vlm_client)
     
-    # 运行 enrich_markdown
+    # 3. 运行 enrich_markdown (内部将并发处理所有图片)
     enriched_md = await processor.enrich_markdown(
         md_content=test_md
     )

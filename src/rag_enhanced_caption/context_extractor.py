@@ -1,11 +1,8 @@
-import logging
+from loguru import logger
 from typing import List, Optional, Dict, Any
 
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
-
-
-logger = logging.getLogger("rag_enhanced_caption")
 
 class MarkdownContextExtractor:
     """

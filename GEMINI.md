@@ -12,9 +12,9 @@ This document provides foundational guidance and architectural mandates for the 
 
 ## 🛠 Coding Conventions
 
-- **Naming**: 
+- **Naming & Logging**: 
   - The main package name is `rag_enhanced_caption`.
-  - Loggers must be named following the pattern `rag_enhanced_caption.<module_name>`.
+  - Use `loguru` for all logging (`from loguru import logger`). Do not use the standard `logging` library.
 - **Type Safety**: All functions and methods MUST have explicit type hints.
 - **Documentation**: Use Google-style docstrings for all classes and public methods.
 - **Error Handling**: Use the `robust_json_parse` utility for all VLM output parsing to handle potential markdown formatting in AI responses.

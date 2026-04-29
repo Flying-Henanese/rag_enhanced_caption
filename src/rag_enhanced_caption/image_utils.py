@@ -3,9 +3,7 @@ import base64
 import asyncio
 import httpx
 from pathlib import Path
-import logging
-
-logger = logging.getLogger("rag_enhanced_caption.image_utils")
+from loguru import logger
 
 def create_image_resolver(base_dir: str | Path = "."):
     """

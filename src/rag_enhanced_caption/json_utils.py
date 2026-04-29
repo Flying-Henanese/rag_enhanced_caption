@@ -1,8 +1,6 @@
 import json
 import re
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 def try_parse_json(json_str: str) -> dict:
     """尝试解析 JSON 字符串，失败返回 None"""

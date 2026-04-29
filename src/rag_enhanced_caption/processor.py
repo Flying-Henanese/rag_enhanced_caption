@@ -1,8 +1,8 @@
-import logging
 import base64
 import asyncio
 from typing import Dict, Any, Optional, Callable, Awaitable, List
 from pathlib import Path
+from loguru import logger
 
 # 内部引用
 from .context_extractor import MarkdownContextExtractor
@@ -10,8 +10,6 @@ from .json_utils import robust_json_parse
 from .image_utils import create_image_resolver
 from .markdown_utils import format_as_collapsible_block
 from . import prompts
-
-logger = logging.getLogger("rag_enhanced_caption.processor")
 
 class MarkdownMultimodalProcessor:
     """

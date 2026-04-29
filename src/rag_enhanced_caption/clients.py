@@ -1,9 +1,7 @@
 import os
 import httpx
 from typing import Optional
-import logging
-
-logger = logging.getLogger("rag_enhanced_caption.clients")
+from loguru import logger
 
 def get_mime_type(image_bytes: bytes) -> str:
     """
