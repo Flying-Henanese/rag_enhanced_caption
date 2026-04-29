@@ -1,6 +1,7 @@
-import urllib.request
 import urllib.parse
 import base64
+import asyncio
+import httpx
 from pathlib import Path
 import logging
 
@@ -8,30 +9,32 @@ logger = logging.getLogger("rag_enhanced_caption.image_utils")
 
 def create_image_resolver(base_dir: str | Path = "."):
     """
-    创建一个支持 本地/网络/Base64 的图像解析器。
+    创建一个支持 本地/网络/Base64 的异步图像解析器。
     
     Args:
         base_dir: Markdown 文件所在的物理目录。用于拼接相对路径。
                   例如，如果 MD 文件在 /doc/readme.md，这里应传入 "/doc"
                   
     Returns:
-        一个接收 image_url 并返回 bytes 的回调函数。
+        一个接收 image_url 并返回 bytes 的异步回调函数。
     """
     base_path = Path(base_dir).resolve()
 
-    def resolver(image_url: str) -> bytes | None:
+    async def resolver(image_url: str) -> bytes | None:
         try:
             # 场景 1: 处理网络图片 (HTTP/HTTPS)
             parsed_url = urllib.parse.urlparse(image_url)
             if parsed_url.scheme in ("http", "https"):
                 logger.info(f"Downloading remote image: {image_url}")
                 # 伪装 User-Agent，防止部分图床防盗链拦截
-                req = urllib.request.Request(
-                    image_url, 
-                    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-                )
-                with urllib.request.urlopen(req, timeout=15) as response:
-                    return response.read()
+                async with httpx.AsyncClient(follow_redirects=True) as client:
+                    response = await client.get(
+                        image_url, 
+                        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'},
+                        timeout=15.0
+                    )
+                    response.raise_for_status()
+                    return response.content
 
             # 场景 2: 处理 Base64 内联图片数据 (Data URI)
             if image_url.startswith("data:image"):
@@ -54,8 +57,8 @@ def create_image_resolver(base_dir: str | Path = "."):
 
             if img_path.exists() and img_path.is_file():
                 logger.debug(f"Reading local image: {img_path}")
-                with open(img_path, "rb") as f:
-                    return f.read()
+                # 使用 to_thread 防止读取大文件阻塞异步事件循环
+                return await asyncio.to_thread(img_path.read_bytes)
             else:
                 logger.warning(f"Local image file not found: {img_path}")
                 return None

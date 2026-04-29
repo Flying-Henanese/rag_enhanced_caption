@@ -39,6 +39,24 @@ Image Source: {image_path}
 """
 
 # 表格分析提示词
+TABLE_PROMPT_WITH_CONTEXT = """Please analyze this table in detail, considering the surrounding context. Provide a JSON response:
+
+{{
+    "detailed_description": "Analyze the table's structure, key data points, and trends, heavily incorporating the provided context to explain WHAT the data actually represents and WHY it is significant.",
+    "entity_info": {{
+        "entity_name": "{entity_name}",
+        "entity_type": "table",
+        "summary": "concise summary of findings and their context"
+    }}
+}}
+
+Context from document:
+{context}
+
+Table Data:
+{table_body}
+"""
+
 TABLE_PROMPT = """Please analyze this table and provide a JSON response:
 
 {{

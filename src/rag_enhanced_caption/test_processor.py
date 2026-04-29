@@ -32,7 +32,7 @@ from rag_enhanced_caption import MarkdownMultimodalProcessor
 # --- 3. 真实请求流程 ---
 
 # 真实的 VLM 调用函数
-async def vlm_call(user_prompt: str, system_prompt: str, image_base64: str = None) -> str:
+async def vlm_call(user_prompt: str, system_prompt: str, image_base64: str = None, image_bytes: bytes = None) -> str:
     print(f"\n[VLM Request]")
     print(f"👉 Target Endpoint: {ENDPOINT}")
     print(f"👉 Target Model: {MODEL_NAME}")
@@ -220,8 +220,7 @@ Token 绝不仅仅是文档中枯燥的计算单位，或是大厂用以扣除�
     
     # 运行 enrich_markdown
     enriched_md = await processor.enrich_markdown(
-        md_content=test_md,
-        image_resolver=image_resolver
+        md_content=test_md
     )
     
     print("\n=== 增强后的 Markdown 结果 ===")

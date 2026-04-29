@@ -19,6 +19,14 @@ This tool is highly sensitive to the hierarchy of your document. For the best re
 - **Breadcrumb Headers**: If your Markdown headers include hierarchical paths (e.g., `# Document | Section | Subsection`), the context extractor will automatically parse these to provide the VLM with a precise "location path".
 - **Hierarchical Chunking**: Using tools that preserve breadcrumbs in headers significantly improves the VLM's understanding of where an image or table sits within a complex document.
 
+## 🧠 Model Recommendations
+
+While this project is VLM-agnostic, choosing the right model is crucial for high-quality captions:
+
+- **qwen3-vl**: Based on our testing, **qwen3-vl** performs exceptionally well. It strikes an excellent balance between **accuracy**, **instruction following**, **speed**, and **cost-effectiveness**.
+- **GPT-4o / Claude 3.5 Sonnet**: Great for extremely complex diagrams or tables, though at a higher cost.
+- **Local Models**: You can also use local models like `Llama-3.2-Vision` or `Qwen2-VL-7B` via tools like Ollama or vLLM.
+
 ## 🚀 Quick Start
 
 ### Installation
@@ -39,16 +47,19 @@ uv pip install -e .
 
 ```python
 import asyncio
-from rag_enhanced_caption import MarkdownMultimodalProcessor
-
-# Define your VLM caller
-async def my_vlm_func(user_prompt: str, system_prompt: str, image_base64: str = None) -> str:
-    # Call your preferred LLM API here (e.g., OpenAI, Anthropic)
-    # Expected to return a JSON-like string with "detailed_description" and "entity_info"
-    return '{"detailed_description": "...", "entity_info": {...}}'
+from rag_enhanced_caption import MarkdownMultimodalProcessor, create_default_vlm_client
 
 async def main():
-    processor = MarkdownMultimodalProcessor(vlm_func=my_vlm_func)
+    # Create a VLM client (defaults to reading VLM_API_KEY, VLM_ENDPOINT from env)
+    # Compatible with OpenAI, vLLM, SiliconFlow, Together AI, etc.
+    vlm_client = create_default_vlm_client(
+        # You can override env vars directly here:
+        # api_key="your-api-key",
+        # endpoint="https://api.siliconflow.cn/v1/chat/completions",
+        # model_name="Qwen/Qwen2-VL-7B-Instruct"
+    )
+
+    processor = MarkdownMultimodalProcessor(vlm_func=vlm_client)
     
     with open("document.md", "r", encoding="utf-8") as f:
         md_content = f.read()

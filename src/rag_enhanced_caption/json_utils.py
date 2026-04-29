@@ -73,20 +73,24 @@ def extract_fields_with_regex(response: str) -> dict:
     """终极兜底：当 JSON 完全损坏时，用正则强行提取关键字段"""
     logger.warning("JSON 解析完全失败，正在使用正则表达式回退提取字段")
 
+    # 预处理：移除推理模型产生的思考过程标签，防止正则提取到思考内容
+    cleaned_response = re.sub(r"<think>.*?</think>", "", response, flags=re.DOTALL | re.IGNORECASE)
+    cleaned_response = re.sub(r"<thinking>.*?</thinking>", "", cleaned_response, flags=re.DOTALL | re.IGNORECASE)
+
     # 提取 detailed_description
-    desc_match = re.search(r'"detailed_description":\s*"([^"]*(?:\\.[^"]*)*)"', response, re.DOTALL)
+    desc_match = re.search(r'"detailed_description":\s*"([^"]*(?:\\.[^"]*)*)"', cleaned_response, re.DOTALL)
     description = desc_match.group(1) if desc_match else ""
 
     # 提取 entity_name
-    name_match = re.search(r'"entity_name":\s*"([^"]*(?:\\.[^"]*)*)"', response)
+    name_match = re.search(r'"entity_name":\s*"([^"]*(?:\\.[^"]*)*)"', cleaned_response)
     entity_name = name_match.group(1) if name_match else "unknown_entity"
 
     # 提取 entity_type
-    type_match = re.search(r'"entity_type":\s*"([^"]*(?:\\.[^"]*)*)"', response)
+    type_match = re.search(r'"entity_type":\s*"([^"]*(?:\\.[^"]*)*)"', cleaned_response)
     entity_type = type_match.group(1) if type_match else "unknown"
 
     # 提取 summary
-    summary_match = re.search(r'"summary":\s*"([^"]*(?:\\.[^"]*)*)"', response, re.DOTALL)
+    summary_match = re.search(r'"summary":\s*"([^"]*(?:\\.[^"]*)*)"', cleaned_response, re.DOTALL)
     summary = summary_match.group(1) if summary_match else description[:100]
 
     return {
