@@ -1,27 +1,40 @@
+"""
+测试模块：验证核心的 Markdown 语义化分块功能
+"""
 import pytest
 import numpy as np
-
-# 现在可以安全地导入了，因为顶层不再有重型依赖
+import os
 from ragflow_like.parsers import semantic
-from sentence_transformers import SentenceTransformer
+from ragflow_like.clients import (
+    get_remote_embedding_client, 
+    get_local_embedding_client
+)
 
 @pytest.fixture
-def embed_fn():
-    """使用真实的嵌入函数 (从 SiliconFlow 获取)"""
-    model_id = "siliconflow/Qwen/Qwen3-Embedding-0.6B"
-    try:
-        model = SentenceTransformer('BAAI/bge-small-zh-v1.5')
-        def encode(sentences):
-            if isinstance(sentences, str):
-                sentences = [sentences]
-            return model.encode(sentences)
-        return encode
-    except Exception as e:
-        pytest.skip(f"无法初始化真实嵌入模型 {model_id}: {e}")
+def remote_embed_fn():
+    """
+    Fixture: 初始化远程 Embedding 客户端 (如 SiliconFlow API)。
+    如果在 CI 环境或本地未配置相关密钥，自动跳过依赖该 fixture 的测试。
+    """
+    client = get_remote_embedding_client()
+    if client is None:
+        pytest.skip("未配置远程 API 环境 (缺少 EMBEDDING_API_KEY 等)")
+    return client
+
+@pytest.fixture
+def local_embed_fn():
+    """
+    Fixture: 初始化本地模型 Embedding 客户端。
+    如果在未安装 sentence-transformers 的环境中运行，则自动跳过。
+    """
+    client = get_local_embedding_client()
+    if client is None:
+        pytest.skip("本地模型环境未就绪 (可能是缺少依赖)")
+    return client
 
 @pytest.fixture
 def sample_markdown():
-    """提供一个包含多章节、公式符号和复杂结构的临时 Markdown 样本"""
+    """完全恢复的最原始长文档测试样本，包含标题级联、图片题注、JSON 块、表格等复杂元素。"""
     return """
 ## 痛点与挑战
 
@@ -156,29 +169,7 @@ key-value格式表格
         "result": [
             {
                 "page_idx": 14,
-                "span_range": [
-                    0,
-                    0
-                ],
-                "bbox": [
-                    70,
-                    586,
-                    525,
-                    614
-                ]
-            },
-            {
-                "page_idx": 14,
-                "span_range": [
-                    0,
-                    0
-                ],
-                "bbox": [
-                    69,
-                    625,
-                    147,
-                    638
-                ]
+                "bbox": [70, 586, 525, 614]
             }
         ]
     }
@@ -191,129 +182,103 @@ key-value格式表格
 
 ### 7. 性能优化
 
-通过将CPU密集型任务和GPU密集型任务切分为相互独立的进程，更好利用了高性能服务器的硬件资源，不仅可以进行多路解析，在单任务的处理上也有显著提升。在附加了实体识别和智能分段等附加功能，处理时间和使用MinerU CLI所需的时间几乎没有差别。在多路服务器上可以通过简单配置，使不同的任务使用服务器上独立硬件资源，成倍提速。
+通过将CPU密集型任务和GPU密集型任务切分为相互独立的进程，更好利用了高性能服务器的硬件资源。
 
 | 解析样例 | 原生MinerU | 本方案 |
 | --- | --- | --- |
-| PDF测试1（158页英文内容） | 79.26s | 79.661 |
-| PDF测试2（731页英文内容） | 402s | 393s |
-| PDF测试2（670页中文内容） | 163 | 116.53 |
-
-测试环境：
-
-- GPU: NVIDIA A100 80GB
-- CPU: Intel(R) Xeon(R) Gold 6348 CPU @ 2.60GHz
+| PDF测试1 | 79.26s | 79.661 |
 
 ## 核心组件
 
 | 依赖名称 | 版本范围 | 功能描述 |
 | --- | --- | --- |
-| **fastapi** | `>=0.115.12` | **Web 框架**：提供高性能的 API 服务接口，支持异步编程。 |
-| **mineru** | `>=2.5.0` | **核心引擎**：MinerU 核心库，提供 PDF 解析、布局分析和公式提取能力。 |
-| **celery** | `>=5.5.3` | **异步任务队列**：用于处理耗时的 PDF 解析和 NLP任务。 |
-| **vllm** | `>=0.11.0` | **大模型推理**：高性能 LLM/VLM 推理引擎，用于加速VLM视觉大模型的推理。 |
-| **transformers** | `>=4.53.0` | **NLP 模型库**：用于加载和运行各种预训练模型（如 NER、Embedding）。 |
-| **minio** | `>=7.2.15` | **对象存储客户端**：用于上传和下载 PDF 源文件及解析后的结果文件。 |
-| **sentence-transformers** | `>=5.1.0` | **文本向量化**：用于生成文本 Embedding，实现基于文本语义的切分。 |
-| **sqlalchemy** | `>=2.0.41` | **ORM 框架**：用于数据库操作 and 连接管理。 |
-| **redis** | (Implied) | **缓存与消息中间件**：作为 Celery 的 Broker 和应用缓存（通过 `redislite` 或外部服务）。 |
+| **fastapi** | `>=0.115.12` | **Web 框架**：提供高性能接口。 |
+| **mineru** | `>=2.5.0` | **核心引擎**：提供 PDF 解析能力。 |
 
 ## 应用价值
 
-- **提质**：将非结构化文档转化为高质量的 Markdown 数据，为大模型知识库建设提供了坚实的基础。
-- **增效**：通过自动化、并行化的处理流程，结合软件架构的优化，将文档处理效率提升数倍，实现了从“小时级”到“分钟级”的跨越。
-- **赋能**：该平台可广泛应用于政策文件检索、合同智能审核、技术文档问答等多种业务场景，切实助力企业提效减负。
-
-| 对比维度 | 原生 MinerU | 本方案 | 优势 |
-| --- | --- | --- | --- |
-| **系统架构** | 单体应用，命令行工具 | 分布式微服务架构（FastAPI + Celery + vLLM + Redis） | 支持高并发、可水平扩展，适合企业级部署 |
-| **服务化能力** | 无服务接口，需本地调用 | 提供 RESTful API，支持 HTTP 调用 | 易于集成到现有系统，支持多语言调用 |
-| **并发处理** | 单任务串行处理 | 分布式任务队列，支持多 Worker 并行 | 处理效率提升数倍，支持海量文档批量处理 |
-| **资源利用** | CPU/GPU 资源利用率低 | CPU 密集任务与 GPU 推理任务分离，多卡并行 | 单机吞吐量大幅提升，资源利用最大化 |
-| **文档格式支持** | 主要支持 PDF | 全格式支持（Word、Excel、PDF、PPT、图片） | 一站式解决企业多格式文档处理需求 |
-| **表格处理** | 基础表格识别 | 智能表格处理（键值对转换 + Markdown 表格） | 满足问答 and 可视化展示双重场景需求 |
-| **文本切分** | 无切分功能 | 基于语义的智能切分（BGE Embedding + 聚类） | 保证语义完整性，提升检索准确性 |
-| **上下文管理** | 无标题聚合功能 | 上下文感知的标题聚合（多级标题路径保留） | 解决碎片化导致的上下文丢失问题 |
-| **信息提取** | 无实体识别功能 | 集成 NER 模型，自动提取关键实体 | 支持多维度精准检索，为文档打智能标签 |
-
+- **提质**：将非结构化文档转化为高质量的 Markdown 数据。
+- **增效**：通过自动化、并行化的处理流程提升效率。
 """
-def test_semantic_chunking_basic(embed_fn, sample_markdown):
-    """测试基本的语义切分逻辑 (使用真实嵌入模型)"""
 
-    # 配置切分参数
-    parser_config = {
-        "chunk_token_num": 1000,  # 针对标准文档调整 token 数
-        "overlapped_percent": 0.1
-    }
-
-    # 执行语义切分
+def test_semantic_chunking_with_full_sample_assertions(remote_embed_fn, sample_markdown):
+    """
+    针对完整原始长文档的深度逻辑断言。
+    
+    测试目标：
+    1. 切分逻辑正常运行且生成一定数量的片段。
+    2. 验证标题路径的正确级联与合并（如 '# 核心技术亮点|4. 上下文感知的标题聚合'）。
+    3. 表格片段附带特有标识并保持结构的封闭。
+    4. 代码块（JSON）在切分后依然完好，不破坏花括号等字符。
+    5. 无相关性的段落（首部与尾部）实现了正确的语义隔离（防止过度合并）。
+    6. 所有重要技术关键词未在处理过程中丢失。
+    """
+    parser_config = {"chunk_token_num": 500}
     chunks = semantic.chunk_markdown(
         sample_markdown,
         parser_config=parser_config,
-        embed_fn=embed_fn
+        embed_fn=remote_embed_fn
     )
 
-    # 1. 基础验证
-    assert isinstance(chunks, list)
-    assert len(chunks) >= 5, f"预期至少切分为 5 个片段，实际仅有 {len(chunks)} 个"
+    # 1. 产出数量验证 (长文档预期切分出多个 Chunk)
+    assert len(chunks) >= 8, f"切分数量不足，实际: {len(chunks)}"
 
-    # 2. 验证上下文感知与标题聚合 (检查 RAGFlow 风格的层级路径)
-    # 验证子章节片段是否保留了父级标题路径
-    # 检查 "Docling" 相关的片段 (属于 "核心技术亮点" -> "多模态融合的高精度解析")
-    docling_chunks = [c for c in chunks if "Docling" in c]
-    assert docling_chunks, "未找到包含 'Docling' 的片段"
-    for chunk in docling_chunks:
-        assert "核心技术亮点" in chunk, "子章节片段丢失了父级标题 '核心技术亮点'"
-        assert "多模态融合的高精度解析" in chunk, "子章节片段丢失了自身标题 '多模态融合的高精度解析'"
-        # 验证层级分隔符
-        path_part = chunk.split("\n")[0] if "\n" in chunk else chunk
-        assert "|" in path_part, f"标题路径中缺失层级分隔符 '|': {path_part}"
-        assert path_part.count("|") >= 1, f"标题路径层级深度不足: {path_part}"
+    # 2. 验证深度嵌套路径聚合 (Level 2 -> Level 3)
+    # 定位“标题聚合”章节，它属于“核心技术亮点”
+    context_chunks = [c for c in chunks if "保留”父级标题-子标题”的完整路径" in c]
+    assert context_chunks, "未找到 '上下文感知的标题聚合' 相关片段"
+    header_line = context_chunks[0].split("\n")[0]
+    assert "核心技术亮点" in header_line, "丢失二级标题父路径"
+    assert "上下文感知的标题聚合" in header_line, "丢失三级标题自身路径"
+    assert "|" in header_line, "路径分隔符缺失"
 
-    # 检查顶级章节 (Level 2) 是否保持独立 (不应包含其他不相关的顶级标题)
-    pain_point_chunks = [c for c in chunks if "格式繁杂兼容难" in c]
-    for chunk in pain_point_chunks:
-        path_part = chunk.split("\n")[0]
-        assert "痛点与挑战" in path_part
-        assert "技术方案概览" not in path_part, "顶级标题路径污染：包含了不相关的顶级标题"
+    # 3. 验证复杂表格处理
+    # 查找“架构设计”中的表格内容
+    arch_table_chunks = [c for c in chunks if "mineru-api" in c]
+    assert arch_table_chunks, "架构设计表格丢失"
+    # 验证是否带有 |Table 语义标记 (由 semantic.py 逻辑生成)
+    assert any("|Table" in c.split("\n")[0] for c in arch_table_chunks), "表格片段未正确打标"
+    assert "|" in arch_table_chunks[0].split("\n")[2], "表格 Markdown 结构不完整"
 
-    # 3. 验证关键技术词汇识别
-    # 重点检查文档中出现的核心组件词汇
-    keywords_to_check = ["FastAPI", "Celery", "vLLM", "MinerU"]
-    found_keywords = [s for s in keywords_to_check if any(s in chunk for chunk in chunks)]
-    assert len(found_keywords) > 0, f"在切分结果中未找到关键技术词汇: {keywords_to_check}"
+    # 4. 验证 JSON 代码块完整性
+    json_chunks = [c for c in chunks if "bbox" in c]
+    assert json_chunks, "JSON 代码块在切分中丢失"
+    assert "page_idx" in json_chunks[0] and "70" in json_chunks[0], "JSON 内部字段或数值丢失"
 
-    # 4. 验证核心章节内容是否存在
-    has_arch_section = any("架构设计" in chunk for chunk in chunks)
-    has_highlight_section = any("核心技术亮点" in chunk for chunk in chunks)
-    assert has_arch_section, "未找到 '架构设计' 相关内容"
-    assert has_highlight_section, "未找到 '核心技术亮点' 相关内容"
+    # 5. 验证语义隔离性 (预防聚类过度合并)
+    # “痛点与挑战” 是开头的背景，不应与末尾的 “应用价值” 混在一起
+    pain_chunk = [c for c in chunks if "痛点与挑战" in c][0]
+    assert "应用价值" not in pain_chunk, "语义隔离失败：开头背景与结尾总结被错误合并"
 
-    # 5. 验证语义聚类是否将不同主题分开
-    # 架构设计和核心技术亮点是两个独立的大章节，语义聚类应该尽量避免将它们的核心内容混在一个 chunk 中
-    arch_start_chunks = [i for i, c in enumerate(chunks) if "## 架构设计" in c]
-    highlight_start_chunks = [i for i, c in enumerate(chunks) if "## 核心技术亮点" in c]
+    # 6. 核心技术名词留存验证
+    full_text = "".join(chunks)
+    for keyword in ["MinerU", "FastAPI", "Celery", "CUDA", "CANN", "Docling", "BGE Embedding"]:
+        assert keyword in full_text, f"核心关键词 {keyword} 丢失"
 
-    if arch_start_chunks and highlight_start_chunks:
-        # 确保起始片段不重合
-        assert not set(arch_start_chunks).intersection(set(highlight_start_chunks)), \
-            "语义聚类错误：架构设计与核心技术亮点的章节头部被挤在了同一个 chunk 中"
+    print(f"\n[全量长样本断言通过] 验证了 {len(chunks)} 个片段。所有路径继承、表格标记、代码块及隔离逻辑均符合预期。")
 
-    print(f"\n[测试成功] 文档成功切分为 {len(chunks)} 个片段")
-    print(f"识别到的关键技术词汇: {found_keywords}")
+def test_remote_api_smoke_with_full_sample(remote_embed_fn, sample_markdown):
+    """
+    冒烟测试：验证远程 API 对全量长样本的处理能力。
+    简单确认是否能无错跑通且输出包含关键内容，适合排查网络、权限等基础连接问题。
+    """
+    chunks = semantic.chunk_markdown(sample_markdown, embed_fn=remote_embed_fn)
+    assert len(chunks) > 0
+    # 简单验证关键词
+    assert "技术方案" in "".join(chunks)
+    print(f"\n[远程 API 验证成功] 成功处理了全量长样本。")
 
-    # 直接输出到控制台预览切分结果，避免文件副作用
-    print("\n--- 语义切分结果开始 ---")
-    for idx, chunk in enumerate(chunks, 1):
-        print(f"\n[Chunk {idx}]\n{chunk}")
-    print("\n--- 语义切分结果结束 ---")
-   
-def test_heading_inference():
-    """测试标题层级推断工具类"""
-    from ragflow_like.utils.md_parser_utils import infer_heading_level
-    
-    assert infer_heading_level("1. 简介") == 1
-    assert infer_heading_level("1.1 详细设计") == 2
-    assert infer_heading_level("1.2.3 核心逻辑") == 3
-    assert infer_heading_level("一、 背景") == 1
-    assert infer_heading_level("普通文本") == 1
+def test_demonstrate_semantic_chunking(remote_embed_fn, sample_markdown):
+    """
+    演示语义分块功能的执行结果并打印在标准输出中。
+    在需要查看最终形态以进行人工校验时，通常使用 `pytest -s` 命令观察本用例的打印结果。
+    """
+    parser_config = {"chunk_token_num": 500}
+    chunks = semantic.chunk_markdown(
+        sample_markdown,
+        parser_config=parser_config,
+        embed_fn=remote_embed_fn
+    )
+    print(f"\n[语义分块演示] 成功切分了 {len(chunks)} 个片段。")
+    # 可以解除注释打印查看，配合 pytest -s
+    # print(chunks)

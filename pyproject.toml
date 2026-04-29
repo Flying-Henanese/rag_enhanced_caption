@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "rag-enhanced-caption"
 version = "0.1.0"
-description = "Analyze and generate captions for images and tables in documents, inspired by RAG-Anything."
+description = "A multi-modal RAG enhancement toolkit featuring surgical Markdown context extraction, VLM-powered image/table captioning, and semantic chunking."
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "Apache-2.0"}
@@ -16,6 +16,10 @@ dependencies = [
     "httpx>=0.28.1",
     "markdown-it-py>=3.0.0",
     "loguru>=0.7.0",
+    "mdit-py-plugins>=0.5.0",
+    "beautifulsoup4>=4.14.3",
+    "nltk>=3.9.4",
+    "scikit-learn>=1.7.2",
 ]
 
 [project.optional-dependencies]
@@ -29,6 +33,8 @@ packages = ["src/rag_enhanced_caption"]
 
 [tool.uv]
 dev-dependencies = [
+    "numpy>=2.2.6",
     "pytest>=8.0.0",
     "python-dotenv>=1.0.0",
+    "sentence-transformers>=5.4.1",
 ]
