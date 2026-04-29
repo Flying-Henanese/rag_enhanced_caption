@@ -1,227 +1,69 @@
-import logging
-import base64
 import asyncio
-import httpx
-from typing import Dict, Any, Optional, Callable, Awaitable, List
+import os
+import sys
 from pathlib import Path
 
-# 内部引用
-from .context_extractor import MarkdownContextExtractor
-from .json_utils import robust_json_parse
-from .image_utils import create_image_resolver
-from . import prompts
-from .markdown_utils import format_as_collapsible_block
+# --- 1. 动态加载环境配置 ---
+# 尝试加载 dotenv
+try:
+    from dotenv import load_dotenv
+    # 获取当前脚本所在目录的 .env 文件
+    env_path = Path(__file__).parent / '.env'
+    if env_path.exists():
+        load_dotenv(dotenv_path=env_path)
+        print(f"[Info] 加载了配置文件: {env_path}")
+except ImportError:
+    print("[Warning] python-dotenv 未安装，将回退为使用系统环境变量或默认值。")
 
-logger = logging.getLogger("another_ec.processor")
+# 从环境变量获取配置，如果未设置则使用默认值
+API_KEY = os.getenv("VLM_API_KEY", "no-api-key")
+ENDPOINT = os.getenv("VLM_ENDPOINT", "http://127.0.0.1:8000/v1/chat/completions")
+MODEL_NAME = os.getenv("VLM_MODEL_NAME", "default-model")
 
-# 本地 OpenAI 兼容服务需要的占位 API Key
-LOCAL_API_KEY = "no-api-key"
+# --- 2. 解决模块导入问题 ---
+# 为了解决直接运行时的 ImportError: No module named 'rag_enhanced_caption'
+# 我们动态将项目根目录加入 sys.path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-SILICONFLOW_API_KEY ="YOUR_API_KEY" 
-
-# 当前使用的视觉模型
-LOCAL_VLM_MODEL = "Qwen/Qwen3-VL-8B-Instruct"
-REMOTE_VLM_MODEL = "Qwen/Qwen3-VL-8B-Instruct"
+from rag_enhanced_caption import MarkdownMultimodalProcessor
 
 
-class MarkdownMultimodalProcessor:
-    """
-    Markdown 多模态处理器 (功能完备版)
-    能够自动扫描并处理 Markdown 文档中的所有多模态元素。
-    """
+# --- 3. 模拟测试流程 ---
 
-    def __init__(
-        self, 
-        vlm_func: Callable[[str, str, Optional[str]], Awaitable[str]],
-        context_extractor: Optional[MarkdownContextExtractor] = None,
-        caption_mode: str = "detailed"  # 支持 "detailed" (适合 GraphRAG) 或 "concise" (适合传统 RAG)
-    ):
-        self.vlm_func = vlm_func
-        self.extractor = context_extractor or MarkdownContextExtractor()
-        self.caption_mode = caption_mode
-
-    async def process_document(
-        self, 
-        md_content: str, 
-        image_resolver: Callable[[str], bytes] = None,
-        base_dir: str | Path = "."
-    ) -> List[Dict[str, Any]]:
-        """
-        自动扫描并处理 Markdown 中的所有多模态元素（图片和表格）
-        """
-        if image_resolver is None:
-            image_resolver = create_image_resolver(base_dir)
-
-        tokens = self.extractor.md.parse(md_content)
-        results = []
-
-        for i, token in enumerate(tokens):
-            # 1. 处理图片 (Inline 里的 Image)
-            if token.type == "inline" and token.children:
-                for child in token.children:
-                    if child.type == "image":
-                        img_url = child.attrGet("src")
-                        img_bytes = image_resolver(img_url) if image_resolver else None
-                        
-                        if img_bytes:
-                            res = await self.process_image_in_markdown(md_content, img_url, img_bytes)
-                            results.append({"type": "image", "data": res})
-                        else:
-                            logger.warning(f"Could not resolve bytes for image: {img_url}")
-
-            # 2. 处理表格 (markdown-it 的 table_open)
-            if token.type == "table_open":
-                if token.map:
-                    lines = md_content.splitlines()
-                    table_md = "\n".join(lines[token.map[0]:token.map[1]])
-                    res = await self.process_table_in_markdown(md_content, table_md)
-                    results.append({"type": "table", "data": res})
-
-        return results
-
-    async def process_image_in_markdown(
-        self, 
-        md_content: str, 
-        image_url: str, 
-        image_bytes: bytes,
-        entity_name: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """处理单张图片"""
-        context = self.extractor.extract_context(md_content, image_url)
-        
-        # 3. 选择模板并格式化
-        if self.caption_mode == "concise":
-            if context:
-                user_prompt = prompts.VISION_PROMPT_CONCISE_WITH_CONTEXT.format(
-                    context=context,
-                    entity_name=entity_name or Path(image_url).stem,
-                    image_path=image_url
-                )
-            else:
-                user_prompt = prompts.VISION_PROMPT_CONCISE.format(
-                    entity_name=entity_name or Path(image_url).stem,
-                    image_path=image_url
-                )
-        else:
-            if context:
-                user_prompt = prompts.VISION_PROMPT_WITH_CONTEXT.format(
-                    context=context,
-                    entity_name=entity_name or Path(image_url).stem,
-                    image_path=image_url
-                )
-            else:
-                user_prompt = prompts.VISION_PROMPT.format(
-                    entity_name=entity_name or Path(image_url).stem,
-                    image_path=image_url
-                )
-
-        image_base64 = base64.b64encode(image_bytes).decode("utf-8")
-
-        try:
-            logger.debug(f"Calling VLM for {image_url}. Prompt len: {len(user_prompt)}")
-            
-            raw_response = await self.vlm_func(
-                user_prompt, 
-                prompts.IMAGE_ANALYSIS_SYSTEM, 
-                image_base64
-            )
-            
-            result = robust_json_parse(raw_response)
-            
-            # 强化防御性检查
-            if isinstance(result, list):
-                result = result[0] if len(result) > 0 else {}
-            if not isinstance(result, dict):
-                result = {}
-            
-            return {
-                "url": image_url,
-                "enhanced_caption": result.get("detailed_description", ""),
-                "entity_info": result.get("entity_info", {}),
-                "context_used": context,
-                "success": True
-            }
-        except Exception as e:
-            logger.error(f"VLM call failed for {image_url}: {e}")
-            return {"url": image_url, "success": False, "error": str(e)}
-
-    async def process_table_in_markdown(
-        self,
-        md_content: str,
-        table_markdown: str,
-        entity_name: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """处理单个表格"""
-        user_prompt = prompts.TABLE_PROMPT.format(
-            entity_name=entity_name or "table_entity",
-            table_body=table_markdown
-        )
-
-        try:
-            raw_response = await self.vlm_func(user_prompt, prompts.TABLE_ANALYSIS_SYSTEM, None)
-            result = robust_json_parse(raw_response)
-            
-            if isinstance(result, list):
-                result = result[0] if len(result) > 0 else {}
-            if not isinstance(result, dict):
-                result = {}
-
-            return {
-                "enhanced_caption": result.get("detailed_description", ""),
-                "entity_info": result.get("entity_info", {}),
-                "success": True
-            }
-        except Exception as e:
-            logger.error(f"Table analysis failed: {e}")
-            return {"success": False, "error": str(e)}
-
-async def vlm_call_local_qwen(prompt: str, system_prompt: str, image_base64: Optional[str] = None) -> str:
-    """
-    本地 Qwen VLM 接口调用实现 (OpenAI 兼容)
-    """
-    url = "https://api.siliconflow.cn/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {SILICONFLOW_API_KEY}",
-        "Content-Type": "application/json"
-    }
+# 模拟 VLM 调用函数，演示如何读取和使用配置
+async def mock_vlm_func(user_prompt: str, system_prompt: str, image_base64: str = None) -> str:
+    print(f"\n[Mock VLM Called]")
+    print(f"👉 Target Endpoint: {ENDPOINT}")
+    print(f"👉 Target Model: {MODEL_NAME}")
+    print(f"👉 API Key prefix: {API_KEY[:5]}***")
     
-    content = [{"type": "text", "text": prompt}]
+    print(f"System: {system_prompt[:50]}...")
+    print(f"User Prompt Snippet:\n{user_prompt[:200]}...")
     if image_base64:
-        content.append({
-            "type": "image_url",
-            "image_url": {
-                "url": f"data:image/jpeg;base64,{image_base64}"
-            }
-        })
+        print(f"Image Base64 length: {len(image_base64)}")
     
-    payload = {
-        "model": REMOTE_VLM_MODEL,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": content}
-        ],
-        "stream": False,
-        "max_tokens": 2048,
-        "temperature": 0.2,
-        "response_format": {"type": "json_object"}
+    # 模拟由于模型没听话，带了一些 Markdown 语法和轻微错误的 JSON
+    mock_response = """
+```json
+{
+    "detailed_description": "Mocked detailed description from VLM. The bidirectional context was very helpful.",
+    "entity_info": {
+        "entity_name": ["MockEntity1", "MockEntity2"],
+        "entity_type": "image",
+        "summary": "This is a mocked summary."
     }
+}
+```
+"""
+    return mock_response
 
-    async with httpx.AsyncClient() as client:
-        try:
-            # 增加超时到 300 秒
-            resp = await client.post(url, json=payload, headers=headers, timeout=300)
-            if resp.status_code != 200:
-                logger.error(f"SiliconFlow API Error ({resp.status_code}): {resp.text}")
-            resp.raise_for_status()
-            return resp.json()["choices"][0]["message"]["content"]
-        except httpx.HTTPStatusError as e:
-            logger.error(f"Local Qwen API HTTP Error: {e.response.status_code} - {e.response.text}")
-            raise
-        except Exception as e:
-            logger.error(f"Local Qwen API Error ({type(e).__name__}): {e}")
-            raise
+# 模拟的图片解析器，不需要真实图片存在，直接返回假字节流
+def mock_image_resolver(url: str) -> bytes:
+    print(f"[Mock Image Resolver] Resolving: {url}")
+    return b"fake_image_bytes"
 
-async def main():
+async def run_test():
+    # 构造一个包含图表和上下文的测试 Markdown
     test_md = r"""# “指月之指”何以观月？——大语言模型分词原理科普
 
 ## 一、引言：由“词元”引发的一系列疑问
@@ -363,28 +205,20 @@ Token 绝不仅仅是文档中枯燥的计算单位，或是大厂用以扣除�
 
 它在底层永远只是一串冷冰冰的数字 ID，但这些数字所指向的，却是人类语言和文化中积淀的浩瀚星河。各大厂商不遗余力地扩充词表、优化分词器，本质都是在竭力让这根“手指”更为精准，以便它指向更大、更圆满的“月亮”。"""
     
-    base_dir = Path(".")
-    processor = MarkdownMultimodalProcessor(vlm_func=vlm_call_local_qwen)
+    print("\n=== 开始测试 MarkdownMultimodalProcessor ===\n")
     
-    print(f">>> 开始处理文档: example.md (直接写入)")
-    print(f">>> 基础目录: {base_dir}")
+    # 初始化 Processor
+    processor = MarkdownMultimodalProcessor(vlm_func=mock_vlm_func)
     
-    try:
-        results = await processor.process_document(test_md, base_dir=base_dir)
-        # import json
-        # print("\n>>> 处理完成，结果如下:")
-        # print(json.dumps(results, indent=2, ensure_ascii=False))
-        md_blocks = [
-            format_as_collapsible_block(item.get("data", {}))
-            for item in results
-            if isinstance(item, dict)
-        ]
-        md = "\n".join(block for block in md_blocks if block)
-        print(md)
-    except Exception as e:
-        import traceback
-        print(f"\n>>> 处理过程中发生错误: {e}")
-        traceback.print_exc()
+    # 运行 enrich_markdown
+    enriched_md = await processor.enrich_markdown(
+        md_content=test_md,
+        image_resolver=mock_image_resolver
+    )
+    
+    print("\n=== 增强后的 Markdown 结果 ===")
+    print(enriched_md)
+    print("=== 测试完成 ===")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(run_test())

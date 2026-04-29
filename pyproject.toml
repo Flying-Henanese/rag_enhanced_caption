@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rag-enhanced-caption"
+version = "0.1.0"
+description = "Analyze and generate captions for images and tables in documents, inspired by RAG-Anything."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "ZHOU shujian", email = "flyinghenanese@gmail.com"},
+]
+dependencies = [
+    "markdown-it-py>=3.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "python-dotenv",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rag_enhanced_caption"]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.0.0",
+    "python-dotenv>=1.0.0",
+]

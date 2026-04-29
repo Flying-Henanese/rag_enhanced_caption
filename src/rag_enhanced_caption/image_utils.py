@@ -4,7 +4,7 @@ import base64
 from pathlib import Path
 import logging
 
-logger = logging.getLogger("another_ec.image_utils")
+logger = logging.getLogger("rag_enhanced_caption.image_utils")
 
 def create_image_resolver(base_dir: str | Path = "."):
     """
