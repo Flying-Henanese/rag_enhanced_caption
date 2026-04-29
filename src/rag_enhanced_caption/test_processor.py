@@ -1,17 +1,18 @@
 import asyncio
 import os
 import sys
+import httpx
+import base64
 from pathlib import Path
 
 # --- 1. 动态加载环境配置 ---
-# 尝试加载 dotenv
 try:
     from dotenv import load_dotenv
-    # 获取当前脚本所在目录的 .env 文件
-    env_path = Path(__file__).parent / '.env'
-    if env_path.exists():
-        load_dotenv(dotenv_path=env_path)
-        print(f"[Info] 加载了配置文件: {env_path}")
+    # 直接定位到项目根目录下的 .env
+    root_dir = Path(__file__).resolve().parents[2]
+    env_path = root_dir / '.env'
+    load_dotenv(dotenv_path=env_path)
+    print(f"[Info] 加载了配置文件: {env_path}")
 except ImportError:
     print("[Warning] python-dotenv 未安装，将回退为使用系统环境变量或默认值。")
 
@@ -28,39 +29,46 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from rag_enhanced_caption import MarkdownMultimodalProcessor
 
 
-# --- 3. 模拟测试流程 ---
+# --- 3. 真实请求流程 ---
 
-# 模拟 VLM 调用函数，演示如何读取和使用配置
-async def mock_vlm_func(user_prompt: str, system_prompt: str, image_base64: str = None) -> str:
-    print(f"\n[Mock VLM Called]")
+# 真实的 VLM 调用函数
+async def vlm_call(user_prompt: str, system_prompt: str, image_base64: str = None) -> str:
+    print(f"\n[VLM Request]")
     print(f"👉 Target Endpoint: {ENDPOINT}")
     print(f"👉 Target Model: {MODEL_NAME}")
-    print(f"👉 API Key prefix: {API_KEY[:5]}***")
     
-    print(f"System: {system_prompt[:50]}...")
-    print(f"User Prompt Snippet:\n{user_prompt[:200]}...")
-    if image_base64:
-        print(f"Image Base64 length: {len(image_base64)}")
-    
-    # 模拟由于模型没听话，带了一些 Markdown 语法和轻微错误的 JSON
-    mock_response = """
-```json
-{
-    "detailed_description": "Mocked detailed description from VLM. The bidirectional context was very helpful.",
-    "entity_info": {
-        "entity_name": ["MockEntity1", "MockEntity2"],
-        "entity_type": "image",
-        "summary": "This is a mocked summary."
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json"
     }
-}
-```
-"""
-    return mock_response
+    
+    messages = [
+        {"role": "system", "content": system_prompt}
+    ]
+    
+    user_content = [{"type": "text", "text": user_prompt}]
+    if image_base64:
+        # 假设图片为 jpeg 格式，如果是 png 等可以根据实际情况调整或动态判断
+        user_content.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}
+        })
+    
+    messages.append({"role": "user", "content": user_content})
+    
+    payload = {
+        "model": MODEL_NAME,
+        "messages": messages,
+        "temperature": 0.2
+    }
+    
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        response = await client.post(ENDPOINT, headers=headers, json=payload)
+        response.raise_for_status()
+        result = response.json()
+        return result["choices"][0]["message"]["content"]
 
-# 模拟的图片解析器，不需要真实图片存在，直接返回假字节流
-def mock_image_resolver(url: str) -> bytes:
-    print(f"[Mock Image Resolver] Resolving: {url}")
-    return b"fake_image_bytes"
+# 真实的图片解析器，通过 URL 下载图片并返回字节流
 
 async def run_test():
     # 构造一个包含图表和上下文的测试 Markdown
@@ -208,12 +216,12 @@ Token 绝不仅仅是文档中枯燥的计算单位，或是大厂用以扣除�
     print("\n=== 开始测试 MarkdownMultimodalProcessor ===\n")
     
     # 初始化 Processor
-    processor = MarkdownMultimodalProcessor(vlm_func=mock_vlm_func)
+    processor = MarkdownMultimodalProcessor(vlm_func=vlm_call)
     
     # 运行 enrich_markdown
     enriched_md = await processor.enrich_markdown(
         md_content=test_md,
-        image_resolver=mock_image_resolver
+        image_resolver=image_resolver
     )
     
     print("\n=== 增强后的 Markdown 结果 ===")
