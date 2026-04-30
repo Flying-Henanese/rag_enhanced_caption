@@ -172,10 +172,14 @@ Token 绝不仅仅是文档中枯燥的计算单位，或是大厂用以扣除�
 
     # 2. 初始化 Processor
     processor = MarkdownMultimodalProcessor(vlm_func=vlm_client)
-    
+    test_file_path = "test_resource/高性能文档解析方案 2e2848cda67f8020abf0d58252a28708.md"
+    with open(test_file_path, "r", encoding="utf-8") as f:
+        test_md = f.read()
+    base_dir = Path(test_file_path).parent.absolute()
     # 3. 运行 enrich_markdown (内部将并发处理所有图片)
     enriched_md = await processor.enrich_markdown(
-        md_content=test_md
+        md_content=test_md,
+        base_dir=str(base_dir)
     )
     
     print("\n=== 增强后的 Markdown 结果 ===")
