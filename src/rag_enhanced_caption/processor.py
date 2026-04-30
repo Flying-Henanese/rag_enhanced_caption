@@ -130,7 +130,7 @@ class MarkdownMultimodalProcessor:
                 "success": True
             }
         except Exception as e:
-            logger.error(f"VLM analysis failed: {e}")
+            logger.exception(f"VLM analysis failed due to an unhandled exception: {e}")
             return {"success": False, "error": str(e)}
 
     async def process_image(
