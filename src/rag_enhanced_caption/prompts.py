@@ -2,22 +2,28 @@
 Prompts for Markdown-based Multi-modal Enhanced Captioning
 """
 
-IMAGE_ANALYSIS_SYSTEM = "You are an expert image analyst. Provide detailed, accurate descriptions and output ONLY valid JSON."
-TABLE_ANALYSIS_SYSTEM = "You are an expert data analyst. Provide detailed table analysis with specific insights and output ONLY valid JSON."
+IMAGE_ANALYSIS_SYSTEM = "You are an expert at analyzing documents. Provide detailed, accurate descriptions and output ONLY valid JSON."
+TABLE_ANALYSIS_SYSTEM = "You are an expert at analyzing documents. Provide detailed table analysis with specific insights and output ONLY valid JSON."
 
 # 带语境的图片分析
-VISION_PROMPT_WITH_CONTEXT = """Please analyze this image in detail, considering the surrounding context. Provide a JSON response:
+VISION_PROMPT_WITH_CONTEXT = """Please examine this image in conjunction with its surrounding context from the document.
 
+CRITICAL INSTRUCTION TO AVOID OCR ATTACK:
+Often, images (especially screenshots, scanned pages, or examples) contain a large amount of text. Your task is NOT to transcribe or summarize the text inside the image. 
+Instead, you MUST use the provided [章节主题] (Section Topic) and [语境信息] (Context Information) to understand WHY this image is placed here.
+Explain what the image demonstrates, proves, or illustrates in relation to the context.
+
+Provide a JSON response:
 {{
-    "detailed_description": "A direct, clear, and concise description of the image's core subject and its logical connection to the context. DO NOT write long-winded paragraphs. Keep it brief and highly informative. IMPORTANT: If the image is a screenshot of a system interface or feature demonstration containing dummy text (e.g., random articles or data used just for illustration), DO NOT summarize the dummy text. Focus ONLY on describing the UI structure, functionality shown, and elements that directly relate to the provided context.",
+    "detailed_description": "A clear description explaining the image's purpose and how it relates to the context. Focus on its structural or illustrative role rather than transcribing its text content.",
     "entity_info": {{
         "entity_name": "{entity_name}",
         "entity_type": "image",
-        "summary": "concise summary of image and its relationship to context"
+        "summary": "1-2 sentence summary of what the image illustrates in this context"
     }}
 }}
 
-Context from document:
+Document Context:
 {context}
 
 Image Source: {image_path}
@@ -39,18 +45,22 @@ Image Source: {image_path}
 """
 
 # 表格分析提示词
-TABLE_PROMPT_WITH_CONTEXT = """Please analyze this table in detail, considering the surrounding context. Provide a JSON response:
+TABLE_PROMPT_WITH_CONTEXT = """Please examine this table in conjunction with its surrounding context from the document.
 
+Your task is to understand the purpose of this table based on the provided [章节主题] (Section Topic) and [语境信息] (Context Information). 
+Explain what data or relationship the table illustrates in relation to the context, rather than just repeating the raw data.
+
+Provide a JSON response:
 {{
-    "detailed_description": "Analyze the table's structure, key data points, and trends, heavily incorporating the provided context to explain WHAT the data actually represents and WHY it is significant.",
+    "detailed_description": "Analyze the table's structure and core message, heavily incorporating the context to explain WHAT the data actually represents and WHY it is significant here.",
     "entity_info": {{
         "entity_name": "{entity_name}",
         "entity_type": "table",
-        "summary": "concise summary of findings and their context"
+        "summary": "1-2 sentence summary of what the table illustrates in this context"
     }}
 }}
 
-Context from document:
+Document Context:
 {context}
 
 Table Data:
@@ -73,10 +83,13 @@ TABLE_PROMPT = """Please analyze this table and provide a JSON response:
 # 以下为适配传统 RAG 的精简版 (Concise) 提示词
 # ---------------------------------------------------------
 
-VISION_PROMPT_CONCISE_WITH_CONTEXT = """Please briefly summarize this image, considering the surrounding context. Provide a concise JSON response:
+VISION_PROMPT_CONCISE_WITH_CONTEXT = """Please briefly summarize this image in conjunction with its surrounding context.
 
+CRITICAL INSTRUCTION: Avoid merely transcribing text from the image. Use the [章节主题] and [语境信息] to briefly explain what the image demonstrates or illustrates.
+
+Provide a concise JSON response:
 {{
-    "detailed_description": "A very brief summary (under 50 words) of the core message or data shown in the image. Focus only on the most important takeaway. IMPORTANT: Ignore dummy text in UI screenshots; focus solely on the demonstrated functionality relevant to the context.",
+    "detailed_description": "A very brief summary (under 50 words) of the image's core illustrative purpose in relation to the context.",
     "entity_info": {{
         "entity_name": "{entity_name}",
         "entity_type": "image",
@@ -84,7 +97,7 @@ VISION_PROMPT_CONCISE_WITH_CONTEXT = """Please briefly summarize this image, con
     }}
 }}
 
-Context from document:
+Document Context:
 {context}
 
 Image Source: {image_path}
@@ -103,4 +116,3 @@ VISION_PROMPT_CONCISE = """Please briefly summarize this image. Provide a concis
 
 Image Source: {image_path}
 """
-

@@ -78,9 +78,9 @@ class MarkdownContextExtractor:
                     if len(parts) > 1:
                         path = " > ".join(parts[:-1])
                         ctype = parts[-1]
-                        parent_header = f"Location Path: {path}\nContent Type: {ctype}"
+                        parent_header = f"[章节主题] {path} ({ctype})"
                     else:
-                        parent_header = f"Section: {raw_content}"
+                        parent_header = f"[章节主题] {raw_content}"
                     break
         
         if parent_header:
@@ -107,10 +107,6 @@ class MarkdownContextExtractor:
                     if len(prev_paragraphs) >= max_prev_paras or current_length >= self.max_chars:
                         break
         
-        if prev_paragraphs:
-            prev_paragraphs.reverse()
-            context_parts.append("Previous Context:\n" + "\n".join(prev_paragraphs))
-
         # 3. 寻找下方邻近正文 (Next Context Paragraphs)
         next_paragraphs = []
         max_next_paras = 2 # 谨慎提取，下方最多 2 段
@@ -133,8 +129,15 @@ class MarkdownContextExtractor:
                     if len(next_paragraphs) >= max_next_paras or current_length >= self.max_chars:
                         break
 
+        context_info = []
+        if prev_paragraphs:
+            prev_paragraphs.reverse()
+            context_info.extend(prev_paragraphs)
         if next_paragraphs:
-            context_parts.append("Following Context:\n" + "\n".join(next_paragraphs))
+            context_info.extend(next_paragraphs)
+            
+        if context_info:
+            context_parts.append("[语境信息]\n" + "\n".join(context_info))
 
         # 4. 组合返回
-        return "\n".join(context_parts)
+        return "\n\n".join(context_parts)
