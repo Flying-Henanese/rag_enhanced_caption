@@ -11,7 +11,6 @@ from loguru import logger
 from dotenv import load_dotenv
 
 # 加载环境变量 (主要是获取 API KEY、ENDPOINT 等信息)
-load_dotenv()
 
 def get_remote_embedding_client(
     api_key: Optional[str] = None,

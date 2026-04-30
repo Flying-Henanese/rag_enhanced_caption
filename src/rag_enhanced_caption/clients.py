@@ -88,7 +88,7 @@ async def default_vlm_call(
         logger.error(f"HTTP Error {e.response.status_code}: {e.response.text}")
         raise
     except Exception as e:
-        logger.error(f"VLM Call failed: {str(e)}")
+        logger.exception(f"VLM Call failed with exception: {str(e)}")
         raise
 
 def create_default_vlm_client(**kwargs):

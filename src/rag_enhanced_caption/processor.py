@@ -76,18 +76,16 @@ class MarkdownMultimodalProcessor:
                 for child in token.children:
                     if child.type == "image":
                         img_url = child.attrGet("src")
-                        target_line = token.map[1] if token.map else -1
+                        target_line = token.map[0] if token.map else -1
                         
-                        # 尝试将 block 注入到段落的闭合标签后
-                        if i > 0 and tokens[i-1].type == "paragraph_open" and tokens[i-1].map:
-                            target_line = tokens[i-1].map[1]
+                        # 不再尝试寻找段落闭合，而是直接使用元素所在行的起始位置 (也就是其上方)
 
                         if target_line != -1:
                             tasks.append(self._task_image(md_content, img_url, image_resolver, target_line))
 
             # 2. 扫描表格
             if token.type == "table_open" and token.map:
-                target_line = token.map[1]
+                target_line = token.map[0]
                 table_md = "\n".join(lines[token.map[0]:token.map[1]])
                 tasks.append(self._task_table(md_content, table_md, target_idx=i, target_line=target_line))
 
@@ -101,7 +99,8 @@ class MarkdownMultimodalProcessor:
         insertions.sort(key=lambda x: x[0], reverse=True)
         enriched_lines = list(lines)
         for line_idx, block in insertions:
-            content = "\n" + block + "\n"
+            content = block + "\n"
+            # 插入到 target_line 的位置，相当于在这行原来内容的正上方
             if line_idx < len(enriched_lines):
                 enriched_lines.insert(line_idx, content)
             else:
@@ -130,7 +129,7 @@ class MarkdownMultimodalProcessor:
                 "success": True
             }
         except Exception as e:
-            logger.error(f"VLM analysis failed: {e}")
+            logger.exception(f"VLM analysis failed due to an unhandled exception: {e}")
             return {"success": False, "error": str(e)}
 
     async def process_image(

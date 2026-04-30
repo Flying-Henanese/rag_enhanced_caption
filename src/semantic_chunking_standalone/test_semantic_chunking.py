@@ -9,6 +9,8 @@ from ragflow_like.clients import (
     get_remote_embedding_client, 
     get_local_embedding_client
 )
+import dotenv
+dotenv.load_dotenv()
 
 @pytest.fixture
 def remote_embed_fn():
@@ -236,8 +238,8 @@ def test_semantic_chunking_with_full_sample_assertions(remote_embed_fn, sample_m
     # 查找“架构设计”中的表格内容
     arch_table_chunks = [c for c in chunks if "mineru-api" in c]
     assert arch_table_chunks, "架构设计表格丢失"
-    # 验证是否带有 |Table 语义标记 (由 semantic.py 逻辑生成)
-    assert any("|Table" in c.split("\n")[0] for c in arch_table_chunks), "表格片段未正确打标"
+    # 标题中不应再出现控制标签
+    assert all("|Table" not in c.split("\n")[0] for c in arch_table_chunks), "标题仍包含控制标签 |Table"
     assert "|" in arch_table_chunks[0].split("\n")[2], "表格 Markdown 结构不完整"
 
     # 4. 验证 JSON 代码块完整性

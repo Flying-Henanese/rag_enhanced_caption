@@ -19,6 +19,23 @@ from ..clients import get_default_embedding_client
 
 logger = logging.getLogger(__name__)
 
+_CONTROL_SPECIAL_ELEMENTS = {
+    "bullet_list_open",
+    "ordered_list_open",
+    "Table",
+    "html_block",
+}
+
+
+def _normalize_special_element(special_element: str | None) -> str | None:
+    """过滤解析过程中的控制标签，避免其进入最终标题。"""
+    if not special_element:
+        return None
+    special = special_element.strip()
+    if not special or special in _CONTROL_SPECIAL_ELEMENTS:
+        return None
+    return special
+
 from ..utils.md_parser_utils import (
     extract_table_block,
     get_title_path,
@@ -57,9 +74,11 @@ def _flush_content(
     level = next((i + 1 for i in range(5, -1, -1) if title_stack[i]), 1)
     title_path = get_title_path(title_stack)
 
-    # 针对不适合截断的特殊元素（如提取后的表格整体，或者图表公式块）
-    if special_element and not allow_split:
-        header = f"{'#' * level} {title_path}|{special_element}" if title_path else f"{'#' * level} {special_element}"
+    normalized_special = _normalize_special_element(special_element)
+
+    # 针对不适合截断的特殊元素（如图表公式块）
+    if normalized_special and not allow_split:
+        header = f"{'#' * level} {title_path}|{normalized_special}" if title_path else f"{'#' * level} {normalized_special}"
         result.extend([header, content, "-" * 10])
     else:
         # 如果当前积攒的内容量超标，必须进行拆分
@@ -70,8 +89,8 @@ def _flush_content(
             )
             for idx, chunk in enumerate(chunks, 1):
                 base_header = f"{'#' * level} {title_path}" if title_path else f"{'#' * level}"
-                if special_element:
-                    header = f"{base_header}|{special_element}|Part {idx}"
+                if normalized_special:
+                    header = f"{base_header}|{normalized_special}|Part {idx}"
                 else:
                     header = f"{base_header}|Part {idx}"
                 # 将 Header、分块内容、以及块边界分隔符(`----------`)加入结果
@@ -79,8 +98,8 @@ def _flush_content(
         else:
             # 未超标，直接作为一个完整的片段输出
             base_header = f"{'#' * level} {title_path}" if title_path else f"{'#' * level}"
-            if special_element:
-                header = f"{base_header}|{special_element}"
+            if normalized_special:
+                header = f"{base_header}|{normalized_special}"
             else:
                 header = base_header
 
