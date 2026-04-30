@@ -76,9 +76,19 @@ class MarkdownMultimodalProcessor:
                 for child in token.children:
                     if child.type == "image":
                         img_url = child.attrGet("src")
-                        target_line = token.map[0] if token.map else -1
+                        target_line = -1
                         
-                        # 不再尝试寻找段落闭合，而是直接使用元素所在行的起始位置 (也就是其上方)
+                        if token.map:
+                            # 方案一：在块元素的行范围内寻找实际包含该图片的行
+                            for line_offset in range(token.map[0], token.map[1]):
+                                if img_url in lines[line_offset]:
+                                    # 将目标行设置为图片所在行的下一行，即放在图片下方
+                                    target_line = line_offset + 1
+                                    break
+                            
+                            # 如果没找到 (罕见情况，例如 URL 被编码/转义导致不完全匹配)，回退到块元素的结束行
+                            if target_line == -1:
+                                target_line = token.map[1]
 
                         if target_line != -1:
                             tasks.append(self._task_image(md_content, img_url, image_resolver, target_line))
