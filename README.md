@@ -23,7 +23,7 @@ Our toolkit serves as the critical **"last mile"** processing step—refining, e
 
 - **VLM-Powered Enrichment (`enhancer`)**: Automatically analyzes images and tables. Analysis results are injected as collapsible `<details>` blocks **directly below** the element for optimal cognitive flow.
 - **Surgical Context Extraction**: Uses `markdown-it-py` to gather deep situational awareness (breadcrumbs, parent headers, and neighboring paragraphs) for the VLM.
-- **Structure-Aware Semantic Chunking (`chunker`)**: An AST-based chunking engine that preserves document hierarchy and uses embedding-based semantic splitting.
+- **Structure-Aware Semantic Chunking (`chunker`)**: Unlike traditional naive character-count chunking, our engine uses AST (Abstract Syntax Tree) parsing to preserve Markdown document hierarchy and leverages Embedding models for true semantic splitting.
 - **Parent-Child RAG Strategy**: A built-in workflow to split documents into searchable high-density "Child" chunks (AI intent summaries) and context-rich "Parent" blocks (original content).
 - **Fully Decoupled**: Use the chunker or the enhancer independently or together.
 
