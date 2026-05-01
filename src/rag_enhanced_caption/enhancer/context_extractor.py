@@ -11,7 +11,7 @@ class MarkdownContextExtractor:
     """
 
     def __init__(self, max_chars: int = 200):
-        self.md = MarkdownIt()
+        self.md = MarkdownIt("commonmark").enable("table")
         self.max_chars = max_chars
 
     def extract_context(self, md_content: str, target_image_url: Optional[str] = None, target_idx: int = -1) -> str:
