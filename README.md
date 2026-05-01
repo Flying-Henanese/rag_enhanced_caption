@@ -2,12 +2,12 @@
 
 A comprehensive multi-modal RAG (Retrieval-Augmented Generation) enhancement toolkit. This project provides surgical Markdown context extraction, VLM-powered image/table captioning, and structure-aware semantic chunking to build high-performance RAG pipelines.
 
-Inspired by [RAG-Anything](https://github.com/HKUDS/RAG-Anything) and [RAGFlow](https://github.com/infiniflow/ragflow).
+Inspired by [RAG-Anything](https://github.com/HKUDS/RAG-Anything).
 
 ## ✨ Core Capabilities
 
 - **VLM-Powered Enrichment**: Automatically analyzes images and tables within Markdown documents, generating descriptive captions and structured metadata using Vision Language Models (VLMs).
-- **Structure-Aware Semantic Chunking**: A RAGFlow-inspired chunking engine that preserves document hierarchy (headers, breadcrumbs), keeps tables/lists intact, and uses embedding-based semantic splitting for long paragraphs.
+- **Structure-Aware Semantic Chunking**: An AST-based chunking engine that preserves document hierarchy (headers, breadcrumbs), keeps tables/lists intact, and uses embedding-based semantic splitting for long paragraphs.
 - **Parent-Child RAG Strategy**: Demonstrates a sophisticated workflow that splits documents into searchable "Child" chunks (AI summaries) and contextual "Parent" blocks for optimal retrieval performance.
 - **Surgical Context Extraction**: Uses `markdown-it-py` to precisely locate multi-modal elements and gather surrounding textual context for the VLM.
 
