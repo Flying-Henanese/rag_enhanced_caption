@@ -95,7 +95,8 @@ class MarkdownMultimodalProcessor:
 
             # 2. 扫描表格
             if token.type == "table_open" and token.map:
-                target_line = token.map[0]
+                # 将 target_line 从 map[0] 改为 map[1]，使得解析块插入到表格下方
+                target_line = token.map[1]
                 table_md = "\n".join(lines[token.map[0]:token.map[1]])
                 tasks.append(self._task_table(md_content, table_md, target_idx=i, target_line=target_line))
 
