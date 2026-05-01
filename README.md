@@ -32,8 +32,8 @@ We recommend using [uv](https://github.com/astral-sh/uv) for fast dependency man
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-repo/rag-enhanced-caption.git
-cd rag-enhanced-caption
+git clone https://github.com/Flying-Henanese/rag_enhanced_caption.git
+cd rag_enhanced_caption
 
 # Install core dependencies
 uv sync
