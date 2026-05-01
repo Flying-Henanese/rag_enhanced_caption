@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from loguru import logger
 
 # --- 环境配置 ---
-root_dir = Path(__file__).resolve().parent
+root_dir = Path(__file__).resolve().parent.parent
 env_path = root_dir / ".env"
 
 if env_path.exists():
@@ -23,13 +23,9 @@ else:
 
 sys.path.insert(0, str(root_dir / "src"))
 
-from rag_enhanced_caption import (
-    MarkdownMultimodalProcessor,
-    create_default_vlm_client,
-)
-from semantic_chunking_standalone.ragflow_like import (
-    semantic_chunk_with_metadata,
-)
+from rag_enhanced_caption.enhancer.processor import MarkdownMultimodalProcessor
+from rag_enhanced_caption.enhancer.vlm_client import create_default_vlm_client
+from rag_enhanced_caption.chunker.dispatcher import chunk_markdown as semantic_chunk_with_metadata
 
 # --- 正则匹配模式 ---
 _IMAGE_ANALYSIS_RE = re.compile(r"<image_analysis>(.*?)</image_analysis>", re.DOTALL)

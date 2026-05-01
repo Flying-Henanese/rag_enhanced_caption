@@ -4,8 +4,8 @@
 import pytest
 import numpy as np
 import os
-from ragflow_like.parsers import semantic
-from ragflow_like.clients import (
+from rag_enhanced_caption.chunker.parsers import semantic
+from rag_enhanced_caption.chunker.embed_client import (
     get_remote_embedding_client, 
     get_local_embedding_client
 )

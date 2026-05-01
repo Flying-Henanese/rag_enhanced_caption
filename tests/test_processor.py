@@ -7,7 +7,7 @@ from pathlib import Path
 try:
     from dotenv import load_dotenv
     # 直接定位到项目根目录下的 .env
-    root_dir = Path(__file__).resolve().parents[2]
+    root_dir = Path(__file__).resolve().parents[1]
     env_path = root_dir / '.env'
     load_dotenv(dotenv_path=env_path)
     print(f"[Info] 加载了配置文件: {env_path}")
@@ -15,11 +15,11 @@ except ImportError:
     print("[Warning] python-dotenv 未安装，将回退为使用系统环境变量或默认值。")
 
 # --- 2. 解决模块导入问题 ---
-# 为了解决直接运行时的 ImportError: No module named 'rag_enhanced_caption'
-# 我们动态将项目根目录加入 sys.path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# 我们动态将项目根目录的 src 目录加入 sys.path
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from rag_enhanced_caption import MarkdownMultimodalProcessor, create_default_vlm_client
+from rag_enhanced_caption.enhancer.processor import MarkdownMultimodalProcessor
+from rag_enhanced_caption.enhancer.vlm_client import create_default_vlm_client
 
 async def run_test():
     # 构造一个包含图表和上下文的测试 Markdown

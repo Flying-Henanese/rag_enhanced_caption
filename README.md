@@ -1,28 +1,28 @@
 # RAG Enhanced Caption & Chunking Toolkit
 
-A comprehensive multi-modal RAG (Retrieval-Augmented Generation) enhancement toolkit. This project provides surgical Markdown context extraction, VLM-powered image/table captioning, and structure-aware semantic chunking to build high-performance RAG pipelines.
+A modular multi-modal RAG (Retrieval-Augmented Generation) enhancement toolkit. This project provides decoupled modules for surgical Markdown context extraction, VLM-powered image/table captioning, and structure-aware semantic chunking.
 
 Inspired by [RAG-Anything](https://github.com/HKUDS/RAG-Anything).
 
 ## ✨ Core Capabilities
 
-- **VLM-Powered Enrichment**: Automatically analyzes images and tables within Markdown documents, generating descriptive captions and structured metadata using Vision Language Models (VLMs).
-- **Structure-Aware Semantic Chunking**: An AST-based chunking engine that preserves document hierarchy (headers, breadcrumbs), keeps tables/lists intact, and uses embedding-based semantic splitting for long paragraphs.
-- **Parent-Child RAG Strategy**: Demonstrates a sophisticated workflow that splits documents into searchable "Child" chunks (AI summaries) and contextual "Parent" blocks for optimal retrieval performance.
-- **Surgical Context Extraction**: Uses `markdown-it-py` to precisely locate multi-modal elements and gather surrounding textual context for the VLM.
+- **VLM-Powered Enrichment (`enhancer`)**: Automatically analyzes images and tables within Markdown documents, generating descriptive captions and structured metadata.
+- **Structure-Aware Semantic Chunking (`chunker`)**: An AST-based chunking engine that preserves document hierarchy (headers, breadcrumbs) and uses embedding-based semantic splitting.
+- **Parent-Child RAG Strategy**: A built-in workflow to split documents into searchable "Child" chunks (AI summaries) and contextual "Parent" blocks.
+- **Fully Decoupled**: Use the chunker or the enhancer independently or together as a suite.
 
 ## 🔄 Dual-Track Processing System (双轨制)
 
 The toolkit operates on two parallel tracks to satisfy both human readability and machine retrieval needs:
 
 1.  **Track 1: Markdown Slicing & Preview**
-    *   **Full Markdown Export**: Generates an enriched `.md` file where chunks are delimited by `---` (hr tokens), ideal for documentation portals or human review.
-    *   **Flexible Granularity**: The parser can return a joined string for display or a `list[str]` of individual slices for custom processing.
+    *   **Full Markdown Export**: Generates an enriched `.md` file where chunks are delimited by `---` (hr tokens), ideal for human review.
+    *   **Flexible Granularity**: The parser can return a joined string or a `list[str]` of individual slices.
 
 2.  **Track 2: Parent-Child Hierarchical Indexing**
-    *   **Two-Step Retrieval**: Generates two structured JSONL files (`index` for embeddings and `docstore` for full content).
-    *   **Child Chunks**: High-precision, smaller fragments (e.g., AI-generated image summaries) optimized for vector search "hits".
-    *   **Parent Chunks**: Larger, context-rich blocks (the original semantic section) that are retrieved once a child is matched, providing the LLM with the full "big picture" for more accurate answering.
+    *   **Two-Step Retrieval**: Generates structured JSONL files (`index` for embeddings and `docstore` for full content).
+    *   **Child Chunks**: High-precision fragments optimized for vector search "hits".
+    *   **Parent Chunks**: Context-rich blocks retrieved to provide the LLM with the full "big picture".
 
 ## 🚀 Quick Start
 
@@ -44,17 +44,13 @@ uv sync --extra local
 
 ### 1. Multi-modal Enrichment (VLM)
 
-Analyze images and tables in your Markdown and inject descriptions as collapsible `<details>` blocks.
-
 ```python
 import asyncio
-from rag_enhanced_caption import MarkdownMultimodalProcessor, create_default_vlm_client
+from rag_enhanced_caption.enhancer.processor import MarkdownMultimodalProcessor
+from rag_enhanced_caption.enhancer.vlm_client import create_default_vlm_client
 
 async def main():
-    # Compatible with OpenAI, vLLM, SiliconFlow, etc.
-    # Reads VLM_API_KEY, VLM_ENDPOINT from .env by default
-    vlm_client = create_default_vlm_client()
-
+    vlm_client = create_default_vlm_client() # Reads VLM_API_KEY from .env
     processor = MarkdownMultimodalProcessor(vlm_func=vlm_client)
     
     with open("document.md", "r", encoding="utf-8") as f:
@@ -69,10 +65,8 @@ if __name__ == "__main__":
 
 ### 2. Semantic Chunking
 
-Split Markdown while preserving structural context and header breadcrumbs.
-
 ```python
-from semantic_chunking_standalone.ragflow_like import semantic_chunk_with_metadata
+from rag_enhanced_caption.chunker.dispatcher import chunk_markdown as semantic_chunk_with_metadata
 
 chunks = semantic_chunk_with_metadata(
     markdown_content="# Section\n## Sub-section\nContent here...",
@@ -88,33 +82,30 @@ for chunk in chunks:
 
 ### 3. Advanced Workflow: Parent-Child RAG
 
-See `orchestrate.py` for a full implementation of:
-1.  **Chunking**: Semantic splitting of the document.
-2.  **Enrichment**: VLM analysis for each chunk.
-3.  **Hierarchy**: Generating `index.jsonl` (for embeddings) and `docstore.jsonl` (for storage) with Parent-Child relationships.
+See `src/example_orchestrator.py` for a full implementation combining chunking and VLM enrichment.
 
 ## 🛠️ Project Structure
 
 ```text
 rag_enhanced_caption/
-├── orchestrate.py           # End-to-end Parent-Child RAG pipeline
 ├── src/
-│   ├── rag_enhanced_caption/ # Core VLM & Extraction Logic
-│   │   ├── clients.py       # VLM client factory (OpenAI-compatible)
-│   │   ├── processor.py     # Main multi-modal processing engine
-│   │   ├── context_extractor.py # Markdown AST traversal
-│   │   └── json_utils.py    # Robust JSON parsing for AI outputs
-│   └── semantic_chunking_standalone/
-│       └── ragflow_like/    # Semantic chunking implementation
-│           ├── parsers/     # AST-based Markdown parser
-│           └── dispatcher.py # Chunking entry point with metadata
-└── test_resource/           # Sample documents and images
+│   ├── example_orchestrator.py      # End-to-end Parent-Child RAG pipeline
+│   └── rag_enhanced_caption/
+│       ├── enhancer/                # VLM Enrichment Module
+│       │   ├── processor.py         # Main engine
+│       │   ├── context_extractor.py # Context logic
+│       │   └── vlm_client.py        # OpenAI-compatible client
+│       └── chunker/                 # Semantic Chunking Module
+│           ├── dispatcher.py        # Entry point with metadata
+│           ├── embed_client.py      # Embedding client
+│           └── parsers/             # AST-based Markdown parser
+└── tests/                           # Unified test suite
 ```
 
 ## 🧠 Model Recommendations
 
-- **Enrichment**: `qwen3-vl-8b-instruct` (via SiliconFlow or local vLLM) offers the best balance of accuracy and cost.
-- **Embedding**: For semantic chunking, `bge-m3` or `text-embedding-3-small` are recommended.
+- **Enrichment**: `qwen3-vl-8b-instruct` (via SiliconFlow or local vLLM).
+- **Embedding**: `bge-m3` or `text-embedding-3-small`.
 
 ## 📄 License
 

@@ -15,7 +15,7 @@ from mdit_py_plugins.dollarmath import dollarmath_plugin
 
 import logging
 from ..nlp import count_tokens
-from ..clients import get_default_embedding_client
+from ..embed_client import get_default_embedding_client
 
 logger = logging.getLogger(__name__)
 
