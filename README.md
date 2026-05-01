@@ -1,63 +1,59 @@
-# RAG Enhanced Caption
+# RAG Enhanced Caption & Chunking Toolkit
 
-Analyze and generate captions for images and tables in Markdown documents, inspired by the enhanced caption mechanism in [RAG-Anything](https://github.com/HKUDS/RAG-Anything).
+A comprehensive multi-modal RAG (Retrieval-Augmented Generation) enhancement toolkit. This project provides surgical Markdown context extraction, VLM-powered image/table captioning, and structure-aware semantic chunking to build high-performance RAG pipelines.
 
-This tiny project provides a surgical way to extract context around multimodal elements (images/tables) in Markdown files and uses Vision Language Models (VLMs) to generate descriptive captions that are injected back into the document as collapsible blocks.
+Inspired by [RAG-Anything](https://github.com/HKUDS/RAG-Anything) and [RAGFlow](https://github.com/infiniflow/ragflow).
 
-## ✨ Features
+## ✨ Core Capabilities
 
-- **Surgical Context Extraction**: Uses `markdown-it-py` to precisely locate images/tables and extract surrounding text (headers, previous/next paragraphs).
-- **Collapsible AI Analysis**: Injects analysis results into Markdown using `<details>` blocks to keep the document readable while providing rich metadata for RAG.
-- **Flexible Image Resolving**: Supports local files, remote URLs, and Base64 inline data.
-- **VLM Agnostic**: Easily plug in any VLM (GPT-4o, Claude 3.5 Sonnet, DeepSeek-VL, etc.) via a simple async function.
-- **Standardized Structure**: Modern Python project layout managed by `uv` and `hatchling`.
+- **VLM-Powered Enrichment**: Automatically analyzes images and tables within Markdown documents, generating descriptive captions and structured metadata using Vision Language Models (VLMs).
+- **Structure-Aware Semantic Chunking**: A RAGFlow-inspired chunking engine that preserves document hierarchy (headers, breadcrumbs), keeps tables/lists intact, and uses embedding-based semantic splitting for long paragraphs.
+- **Parent-Child RAG Strategy**: Demonstrates a sophisticated workflow that splits documents into searchable "Child" chunks (AI summaries) and contextual "Parent" blocks for optimal retrieval performance.
+- **Surgical Context Extraction**: Uses `markdown-it-py` to precisely locate multi-modal elements and gather surrounding textual context for the VLM.
 
-## 💡 Best Practices for Better Captions
+## 🔄 Dual-Track Processing System (双轨制)
 
-This tool is highly sensitive to the hierarchy of your document. For the best results, especially when dealing with pre-processed or chunked Markdown:
+The toolkit operates on two parallel tracks to satisfy both human readability and machine retrieval needs:
 
-- **Breadcrumb Headers**: If your Markdown headers include hierarchical paths (e.g., `# Document | Section | Subsection`), the context extractor will automatically parse these to provide the VLM with a precise "location path".
-- **Hierarchical Chunking**: Using tools that preserve breadcrumbs in headers significantly improves the VLM's understanding of where an image or table sits within a complex document.
+1.  **Track 1: Markdown Slicing & Preview**
+    *   **Full Markdown Export**: Generates an enriched `.md` file where chunks are delimited by `---` (hr tokens), ideal for documentation portals or human review.
+    *   **Flexible Granularity**: The parser can return a joined string for display or a `list[str]` of individual slices for custom processing.
 
-## 🧠 Model Recommendations
-
-While this project is VLM-agnostic, choosing the right model is crucial for high-quality captions:
-
-- **qwen3-vl**: Based on our testing, **qwen3-vl** performs exceptionally well. It strikes an excellent balance between **accuracy**, **instruction following**, **speed**, and **cost-effectiveness**.
-- **GPT-4o / Claude 3.5 Sonnet**: Great for extremely complex diagrams or tables, though at a higher cost.
-- **Local Models**: You can also use local models like `Llama-3.2-Vision` or `Qwen2-VL-7B` via tools like Ollama or vLLM.
+2.  **Track 2: Parent-Child Hierarchical Indexing**
+    *   **Two-Step Retrieval**: Generates two structured JSONL files (`index` for embeddings and `docstore` for full content).
+    *   **Child Chunks**: High-precision, smaller fragments (e.g., AI-generated image summaries) optimized for vector search "hits".
+    *   **Parent Chunks**: Larger, context-rich blocks (the original semantic section) that are retrieved once a child is matched, providing the LLM with the full "big picture" for more accurate answering.
 
 ## 🚀 Quick Start
 
 ### Installation
 
-We recommend using [uv](https://github.com/astral-sh/uv) for fast and reliable dependency management.
+We recommend using [uv](https://github.com/astral-sh/uv) for fast dependency management.
 
 ```bash
 # Clone the repository
 git clone https://github.com/your-repo/rag-enhanced-caption.git
 cd rag-enhanced-caption
 
-# Create a virtual environment and install dependencies
-uv venv
-uv pip install -e .
+# Install core dependencies
+uv sync
+
+# (Optional) Install local embedding support for semantic chunking
+uv sync --extra local
 ```
 
-### Basic Usage
+### 1. Multi-modal Enrichment (VLM)
+
+Analyze images and tables in your Markdown and inject descriptions as collapsible `<details>` blocks.
 
 ```python
 import asyncio
 from rag_enhanced_caption import MarkdownMultimodalProcessor, create_default_vlm_client
 
 async def main():
-    # Create a VLM client (defaults to reading VLM_API_KEY, VLM_ENDPOINT from env)
-    # Compatible with OpenAI, vLLM, SiliconFlow, Together AI, etc.
-    vlm_client = create_default_vlm_client(
-        # You can override env vars directly here:
-        # api_key="your-api-key",
-        # endpoint="https://api.siliconflow.cn/v1/chat/completions",
-        # model_name="Qwen/Qwen2-VL-7B-Instruct"
-    )
+    # Compatible with OpenAI, vLLM, SiliconFlow, etc.
+    # Reads VLM_API_KEY, VLM_ENDPOINT from .env by default
+    vlm_client = create_default_vlm_client()
 
     processor = MarkdownMultimodalProcessor(vlm_func=vlm_client)
     
@@ -65,27 +61,60 @@ async def main():
         md_content = f.read()
     
     enriched_md = await processor.enrich_markdown(md_content, base_dir="./")
-    
-    with open("document_enriched.md", "w", encoding="utf-8") as f:
-        f.write(enriched_md)
+    print(enriched_md)
 
 if __name__ == "__main__":
     asyncio.run(main())
 ```
 
+### 2. Semantic Chunking
+
+Split Markdown while preserving structural context and header breadcrumbs.
+
+```python
+from semantic_chunking_standalone.ragflow_like import semantic_chunk_with_metadata
+
+chunks = semantic_chunk_with_metadata(
+    markdown_content="# Section\n## Sub-section\nContent here...",
+    file_id="doc_001",
+    filename="guide.md",
+    parser_config={"chunk_token_num": 512}
+)
+
+for chunk in chunks:
+    print(f"Header: {chunk['title']}")
+    print(f"Content: {chunk['content'][:100]}...")
+```
+
+### 3. Advanced Workflow: Parent-Child RAG
+
+See `orchestrate.py` for a full implementation of:
+1.  **Chunking**: Semantic splitting of the document.
+2.  **Enrichment**: VLM analysis for each chunk.
+3.  **Hierarchy**: Generating `index.jsonl` (for embeddings) and `docstore.jsonl` (for storage) with Parent-Child relationships.
+
 ## 🛠️ Project Structure
 
 ```text
 rag_enhanced_caption/
-├── pyproject.toml           # Project metadata and dependencies
+├── orchestrate.py           # End-to-end Parent-Child RAG pipeline
 ├── src/
-│   └── rag_enhanced_caption/
-│       ├── __init__.py      # Exports main classes
-│       ├── processor.py     # Core multimodal processing logic
-│       ├── context_extractor.py # Markdown context extraction logic
-│       └── image_utils.py   # Image loading and resolving
-└── tests/                   # Test scripts and suites
+│   ├── rag_enhanced_caption/ # Core VLM & Extraction Logic
+│   │   ├── clients.py       # VLM client factory (OpenAI-compatible)
+│   │   ├── processor.py     # Main multi-modal processing engine
+│   │   ├── context_extractor.py # Markdown AST traversal
+│   │   └── json_utils.py    # Robust JSON parsing for AI outputs
+│   └── semantic_chunking_standalone/
+│       └── ragflow_like/    # Semantic chunking implementation
+│           ├── parsers/     # AST-based Markdown parser
+│           └── dispatcher.py # Chunking entry point with metadata
+└── test_resource/           # Sample documents and images
 ```
+
+## 🧠 Model Recommendations
+
+- **Enrichment**: `qwen3-vl-8b-instruct` (via SiliconFlow or local vLLM) offers the best balance of accuracy and cost.
+- **Embedding**: For semantic chunking, `bge-m3` or `text-embedding-3-small` are recommended.
 
 ## 📄 License
 
