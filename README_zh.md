@@ -1,5 +1,8 @@
 # RAG 增强注释与分块工具包 (RAG Enhanced Caption & Chunking Toolkit)
 
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+
 [**English**](README.md) | [**中文**](README_zh.md)
 
 这是一个模块化的多模态 RAG (Retrieval-Augmented Generation) 增强工具包。本项目提供了高度解耦的模块，用于精准的 Markdown 上下文提取、基于视觉大模型 (VLM) 的图片/表格注释增强，以及感知文档结构的语义分块。
@@ -35,6 +38,19 @@
     *   **增强后的 Markdown (`_enhanced.md`)**：生成带分割符 (`---`) 的 Markdown 文件，包含完整的 AI 注释，非常适合人类审查、对比或用于构建文档知识门户。
 2.  **轨道二：父子层级索引 (Parent-Child Indexing)**
     *   **小块搜索，大块召回 (Small-to-Big Retrieval)**：生成两套 JSONL 文件。`_index.jsonl` 用于向量数据库索引（纯净的语义挂钩），而 `_docstore.jsonl` 用于召回后的文档生成（包含完整的 Markdown 内容和元数据）。
+
+### 🌊 架构工作流 (Architecture & Workflow)
+
+```mermaid
+graph TD
+    A[输入解析后的 Markdown] --> B(上下文提取)
+    B -->|面包屑、父级标题、相邻段落| C{VLM 增强注释}
+    C -->|AI 意图摘要| D[增强版 Markdown]
+    D --> E(结构感知语义分块)
+    E --> F[父子块拆分]
+    F -->|子块 (用于检索)| G[(向量数据库索引)]
+    F -->|父块 (用于召回)| H[(文档存储库)]
+```
 
 ## 🚀 快速开始
 

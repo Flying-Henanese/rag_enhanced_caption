@@ -12,6 +12,25 @@ license = {text = "Apache-2.0"}
 authors = [
     {name = "ZHOU shujian", email = "flyinghenanese@gmail.com"},
 ]
+keywords = [
+    "rag",
+    "llm",
+    "vlm",
+    "markdown",
+    "semantic-chunking",
+    "retrieval-augmented-generation",
+    "document-processing"
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Text Processing :: Markup :: Markdown",
+]
 dependencies = [
     "httpx>=0.28.1",
     "markdown-it-py>=3.0.0",
@@ -22,6 +41,11 @@ dependencies = [
     "scikit-learn>=1.7.2",
     "pytest>=9.0.3",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Flying-Henanese/rag_enhanced_caption"
+Repository = "https://github.com/Flying-Henanese/rag_enhanced_caption.git"
+Issues = "https://github.com/Flying-Henanese/rag_enhanced_caption/issues"
 
 [project.optional-dependencies]
 local = [

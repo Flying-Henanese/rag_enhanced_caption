@@ -1,5 +1,8 @@
 # RAG Enhanced Caption & Chunking Toolkit
 
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+
 [**English**](README.md) | [**中文**](README_zh.md)
 
 A modular multi-modal RAG (Retrieval-Augmented Generation) enhancement toolkit. This project provides decoupled modules for surgical Markdown context extraction, VLM-powered image/table captioning, and structure-aware semantic chunking.
@@ -33,6 +36,19 @@ Our toolkit serves as the critical **"last mile"** processing step—refining, e
     *   **Enriched Markdown**: Generates a `.md` file with delimited chunks (`---`), ideal for human review or documentation portals.
 2.  **Track 2: Parent-Child Hierarchical Indexing**
     *   **Small-to-Big Retrieval**: Generates `_index.jsonl` (pure semantic hooks for vector search) and `_docstore.jsonl` (full content retrieval with metadata).
+
+### 🌊 Architecture / Workflow
+
+```mermaid
+graph TD
+    A[Input Parsed Markdown] --> B(Context Extraction)
+    B -->|Breadcrumbs, Headers, Surrounding Text| C{VLM Enrichment}
+    C -->|AI Intent Annotations| D[Enhanced Markdown]
+    D --> E(Structure-Aware Semantic Chunking)
+    E --> F[Parent-Child RAG Split]
+    F -->|Child Chunks| G[(Vector DB Index)]
+    F -->|Parent Blocks| H[(Docstore)]
+```
 
 ## 🚀 Quick Start
 
