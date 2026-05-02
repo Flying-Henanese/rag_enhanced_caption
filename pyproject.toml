@@ -40,6 +40,7 @@ dependencies = [
     "nltk>=3.9.4",
     "scikit-learn>=1.7.2",
     "pytest>=9.0.3",
+    "llama-index-embeddings-openai>=0.6.0",
 ]
 
 [project.urls]
@@ -51,6 +52,10 @@ Issues = "https://github.com/Flying-Henanese/rag_enhanced_caption/issues"
 local = [
     "numpy>=2.2.6",
     "sentence-transformers>=5.4.1",
+]
+integrations = [
+    "langchain-core",
+    "llama-index-core",
 ]
 dev = [
     "pytest",

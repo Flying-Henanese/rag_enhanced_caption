@@ -27,15 +27,31 @@ Our toolkit serves as the critical **"last mile"** processing step—refining, e
 - **VLM-Powered Enrichment (`enhancer`)**: Automatically analyzes images and tables. Analysis results are injected as collapsible `<details>` blocks **directly below** the element for optimal cognitive flow.
 - **Surgical Context Extraction**: Uses `markdown-it-py` to gather deep situational awareness (breadcrumbs, parent headers, and neighboring paragraphs) for the VLM.
 - **Structure-Aware Semantic Chunking (`chunker`)**: Unlike traditional naive character-count chunking, our engine uses AST (Abstract Syntax Tree) parsing to preserve Markdown document hierarchy and leverages Embedding models for true semantic splitting.
+
+### 🧬 The Hybrid Chunking Pipeline
+
+Our chunking engine operates through a sophisticated multi-stage pipeline designed to maximize context retention while minimizing noise:
+
+1.  **Stage 1: AST Structural Parsing**: Using `markdown-it-py`, the document is decomposed into a hierarchy of tokens. This ensures that structural elements like tables, math blocks, and code fences are treated as atomic units and not arbitrarily sliced.
+2.  **Stage 2: Contextual Breadcrumbs**: For every chunk generated, the engine automatically injects the full heading path (e.g., `# Root|Parent|Subtitle`) as a prefix. This "situational awareness" ensures that even isolated chunks carry their original document context.
+3.  **Stage 3: Image-Caption Binding**: A specialized detector looks for image links followed by captions (e.g., `![alt](url)\nFigure 1: Describe`). It forces these pairs to stay in the same chunk to prevent semantic decoupling during retrieval.
+4.  **Stage 4: Hierarchical Semantic Splitting**:
+    *   **Paragraph Level**: First, it attempts to split at natural paragraph boundaries (`\n\n`).
+    *   **Line Level**: If a paragraph is too long, it attempts to split at line breaks (`\n`).
+    *   **Vector Clustering (The "Fail-Safe")**: If a single line exceeds the token limit, the engine triggers an **Embedding-based clustering algorithm**. It converts sentences into vectors and uses semantic similarity to find the most logical "cut points," ensuring that even long sentences are split at semantically meaningful locations rather than mid-word.
+
 - **Parent-Child RAG Strategy**: A built-in workflow to split documents into searchable high-density "Child" chunks (AI intent summaries) and context-rich "Parent" blocks (original content).
 - **Fully Decoupled**: Use the chunker or the enhancer independently or together.
 
 ## 🔄 Dual-Track Processing System
 
+This toolkit outputs data in two parallel tracks, ensuring you have both human-readable previews and enterprise-grade data structures ready for large-scale RAG deployments.
+
 1.  **Track 1: Markdown Slicing & Preview**
-    *   **Enriched Markdown**: Generates a `.md` file with delimited chunks (`---`), ideal for human review or documentation portals.
-2.  **Track 2: Parent-Child Hierarchical Indexing**
-    *   **Small-to-Big Retrieval**: Generates `_index.jsonl` (pure semantic hooks for vector search) and `_docstore.jsonl` (full content retrieval with metadata).
+    *   **Enriched Markdown (`_enhanced.md`)**: Generates a `.md` file with delimited chunks (`---`) and complete AI annotations. Ideal for human review, comparison, or documentation portals.
+2.  **Track 2: Enterprise Parent-Child Hierarchical Storage**
+    *   **Vector DB Payload (`_index.jsonl`)**: Lightweight semantic hooks (only AI summaries and parent pointers). Designed to be ingested into expensive, high-performance Vector Databases (like Milvus or Qdrant) without bloating the memory.
+    *   **Document Store Payload (`_docstore.jsonl`)**: The heavy, context-rich "Parent" blocks (containing original Markdown, tables, and VLM JSON payloads). Designed to be stored in cheaper, high-capacity NoSQL databases (like MongoDB or Redis). During retrieval, the Vector DB hits a lightweight child hook, which then retrieves the full parent context from this Document Store to feed the LLM.
 
 ### 🌊 Architecture / Workflow
 
@@ -99,7 +115,7 @@ async def main():
     vlm_client = create_default_vlm_client()
     processor = MarkdownMultimodalProcessor(vlm_func=vlm_client)
     
-    with open("doc.md", "r") as f:
+    with open("doc.md", "r", encoding="utf-8") as f:
         enriched_md = await processor.enrich_markdown(f.read(), base_dir="./")
     print(enriched_md)
 
@@ -110,7 +126,7 @@ if __name__ == "__main__":
 ### 3. Semantic Chunking (Standalone)
 
 ```python
-from semantic_chunking_standalone.ragflow_like import semantic_chunk_with_metadata
+from rag_enhanced_caption.chunker import semantic_chunk_with_metadata
 
 chunks = semantic_chunk_with_metadata(
     markdown_content="# Header\nContent...",
@@ -120,16 +136,57 @@ chunks = semantic_chunk_with_metadata(
 )
 ```
 
+### 4. Ecosystem Integration (LangChain & LlamaIndex)
+
+The output JSONL files (`_docstore.jsonl` and `_index.jsonl`) are highly structured and ready to be ingested into popular RAG frameworks. Here is how you can quickly load the generated parent chunks into your pipeline.
+
+**For LlamaIndex:**
+```python
+import json
+from llama_index.core import Document
+
+documents = []
+with open("output_folder/input_docstore.jsonl", "r", encoding="utf-8") as f:
+    for line in f:
+        data = json.loads(line)
+        # Load enhanced content and metadata
+        documents.append(Document(
+            text=data.get("full_content", ""),
+            metadata=data.get("metadata", {})
+        ))
+
+# Build your vector index
+# index = VectorStoreIndex.from_documents(documents)
+```
+
+**For LangChain:**
+```python
+import json
+from langchain_core.documents import Document
+
+documents = []
+with open("output_folder/input_docstore.jsonl", "r", encoding="utf-8") as f:
+    for line in f:
+        data = json.loads(line)
+        documents.append(Document(
+            page_content=data.get("full_content", ""),
+            metadata=data.get("metadata", {})
+        ))
+
+# Insert into your vector store
+# vectorstore = Chroma.from_documents(documents, embedding_model)
+```
+
 ## 🛠️ Project Structure
 
 ```text
 rag_enhanced_caption/
-├── orchestrate.py                   # End-to-end Parent-Child RAG pipeline script
+├── cli.py                           # Command Line Interface (Main Entry)
 ├── src/
-│   ├── rag_enhanced_caption/        # Top-level package
-│   │   ├── chunker/                 # Semantic Chunking (Structure-Aware)
-│   │   └── enhancer/                # VLM Enrichment (Visual-to-Text)
-│   └── semantic_chunking_standalone/# Independent chunking logic
+│   ├── example_orchestrator.py      # Example Parent-Child RAG pipeline script
+│   └── rag_enhanced_caption/        # Top-level package
+│       ├── chunker/                 # Semantic Chunking (Structure-Aware)
+│       └── enhancer/                # VLM Enrichment (Visual-to-Text)
 └── tests/                           # Unified test suite
 ```
 

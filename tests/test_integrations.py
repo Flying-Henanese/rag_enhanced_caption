@@ -1,0 +1,45 @@
+import json
+import os
+from llama_index.core import Document as LlamaDocument
+from langchain_core.documents import Document as LangchainDocument
+
+def test_ecosystem_integrations():
+    # Use the existing docstore file from test_resource
+    test_file_path = "test_resource/高性能文档解析方案 2e2848cda67f8020abf0d58252a28708_docstore.jsonl"
+    
+    if not os.path.exists(test_file_path):
+        print(f"Skipping test: {test_file_path} not found.")
+        return
+
+    llama_docs = []
+    langchain_docs = []
+    
+    print("Testing LlamaIndex and LangChain integrations...")
+    
+    with open(test_file_path, "r", encoding="utf-8") as f:
+        for line in f:
+            data = json.loads(line)
+            
+            content = data.get("full_content", "")
+            assert content, f"Document {data.get('id', 'unknown')} has empty content!"
+            
+            # 1. Test LlamaIndex
+            llama_doc = LlamaDocument(
+                text=content,
+                metadata=data.get("metadata", {})
+            )
+            llama_docs.append(llama_doc)
+            
+            # 2. Test LangChain
+            langchain_doc = LangchainDocument(
+                page_content=content,
+                metadata=data.get("metadata", {})
+            )
+            langchain_docs.append(langchain_doc)
+
+    print(f"Successfully loaded {len(llama_docs)} LlamaIndex documents.")
+    print(f"Successfully loaded {len(langchain_docs)} LangChain documents.")
+    print("Integration tests passed successfully!")
+
+if __name__ == "__main__":
+    test_ecosystem_integrations()

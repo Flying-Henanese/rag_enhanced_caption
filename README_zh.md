@@ -27,17 +27,31 @@
 - **基于 VLM 的增强注释 (`enhancer`)**：自动分析文档中的图片和表格。分析结果将被封装在可折叠的 `<details>` HTML 块中，并精准注入到该元素的**正下方**，确保最佳的阅读体验和逻辑连贯性。
 - **外科手术式上下文提取**：利用 `markdown-it-py` 进行语法树解析，为 VLM 收集深度的情境感知信息（包括面包屑导航、父级标题和相邻段落）。
 - **结构感知的语义分块 (`chunker`)**：区别于传统机械地按字数 (Character-count) 切分，我们的引擎基于抽象语法树 (AST) 解析 Markdown，不仅能保留文档的原始层级结构和上下文，更结合 Embedding 模型进行真正的语义聚类切分。
+
+### 🧬 混合分块流水线 (Hybrid Chunking Pipeline)
+
+我们的分块引擎采用多阶段处理流水线，旨在最大程度保留文档的原始逻辑语境，同时剔除检索噪音：
+
+1.  **阶段一：AST 结构化解析**：利用 `markdown-it-py` 将文档解析为 Token 语法树。这确保了诸如表格 (Table)、数学公式 (Math Block) 和代码块 (Code Fence) 等结构化元素被视为原子单元，而不会被暴力切断。
+2.  **阶段二：标题路径聚合 (Breadcrumbs)**：系统会为每一个切片自动注入完整的层级路径（例如：`# 一级标题|二级标题|子标题`）作为前缀。这种“情境感知”能力确保了即使是深层的孤立切片，也依然携带其在文档中的位置信息。
+3.  **阶段三：图文/表文绑定**：专门的探测器会寻找图片链接及其随后的题注（如：`![alt](url)\n图 1：描述文本`）。系统会强制将它们绑定在同一个切片中，防止在检索时发生语义断裂。
+4.  **阶段四：层次化语义切分**：
+    *   **段落级优先**：首先尝试在自然的段落边界 (`\n\n`) 进行切分。
+    *   **行级细化**：如果段落依然超长，则尝试在换行符 (`\n`) 处切分。
+    *   **向量聚类 (兜底策略)**：如果单行文本仍然超过 Token 限制（例如极长的长难句），引擎将触发**基于 Embedding 的聚类算法**。它将句子转化为向量，通过语义相似度寻找最合乎逻辑的“切割点”，确保即使在极端情况下，切分也发生在语义转折处，而非单词中间。
+
 - **父子块 RAG 策略 (Parent-Child RAG)**：内置的业务工作流能够将文档拆分为**易于检索的高密度“子块”**（仅包含 AI 意图摘要）和**富含上下文的“父块”**（原始文本内容）。
 - **完全解耦**：你可以根据需要，单独使用分块器 (Chunker) 、增强器 (Enhancer)，或是将它们结合使用。
 
 ## 🔄 双轨处理系统
 
-本项目提供两套并行的处理输出，以满足不同的使用场景：
+本项目提供两套并行的处理输出，以满足不同的使用场景。不仅适合本地原型测试，更为企业级的大规模 RAG 部署（读写分离、存储分离架构）做好了数据接口的准备。
 
 1.  **轨道一：Markdown 切片与预览**
     *   **增强后的 Markdown (`_enhanced.md`)**：生成带分割符 (`---`) 的 Markdown 文件，包含完整的 AI 注释，非常适合人类审查、对比或用于构建文档知识门户。
-2.  **轨道二：父子层级索引 (Parent-Child Indexing)**
-    *   **小块搜索，大块召回 (Small-to-Big Retrieval)**：生成两套 JSONL 文件。`_index.jsonl` 用于向量数据库索引（纯净的语义挂钩），而 `_docstore.jsonl` 用于召回后的文档生成（包含完整的 Markdown 内容和元数据）。
+2.  **轨道二：企业级父子层级分离存储 (Parent-Child Storage)**
+    *   **向量数据库载荷 (`_index.jsonl`)**：极其轻量的语义挂钩（仅包含 AI 意图摘要和父级指针）。专为昂贵、要求高性能的内存计算型向量数据库（如 Milvus, Qdrant）设计，确保检索极速且不撑爆内存。
+    *   **文档存储库载荷 (`_docstore.jsonl`)**：包含完整原文、Markdown 表格和 VLM 深度解析 JSON 的重型“父块”数据。专为便宜、大容量的 NoSQL 数据库（如 MongoDB, Redis 等）设计。检索时，向量库秒级命中轻量的子块摘要（Child Hook），随后系统根据指针去文档库召回这段豪华的完整上下文（Parent Context）并喂给 LLM。
 
 ### 🌊 架构工作流 (Architecture & Workflow)
 
@@ -101,7 +115,7 @@ async def main():
     vlm_client = create_default_vlm_client()
     processor = MarkdownMultimodalProcessor(vlm_func=vlm_client)
     
-    with open("doc.md", "r") as f:
+    with open("doc.md", "r", encoding="utf-8") as f:
         enriched_md = await processor.enrich_markdown(f.read(), base_dir="./")
     print(enriched_md)
 
@@ -112,7 +126,7 @@ if __name__ == "__main__":
 ### 3. 语义分块 (独立使用)
 
 ```python
-from semantic_chunking_standalone.ragflow_like import semantic_chunk_with_metadata
+from rag_enhanced_caption.chunker import semantic_chunk_with_metadata
 
 chunks = semantic_chunk_with_metadata(
     markdown_content="# Header\nContent...",
@@ -122,16 +136,57 @@ chunks = semantic_chunk_with_metadata(
 )
 ```
 
+### 4. 生态对接 (LangChain & LlamaIndex)
+
+本工具输出的 JSONL 文件（`_docstore.jsonl` 和 `_index.jsonl`）结构清晰，开箱即用，可以无缝接入主流的 RAG 框架。以下是如何将生成的父块加载到您的业务流水线中的示例代码。
+
+**对接 LlamaIndex：**
+```python
+import json
+from llama_index.core import Document
+
+documents = []
+with open("output_folder/input_docstore.jsonl", "r", encoding="utf-8") as f:
+    for line in f:
+        data = json.loads(line)
+        # 提取增强后的文本和元数据
+        documents.append(Document(
+            text=data.get("full_content", ""),
+            metadata=data.get("metadata", {})
+        ))
+
+# 构建您的向量索引
+# index = VectorStoreIndex.from_documents(documents)
+```
+
+**对接 LangChain：**
+```python
+import json
+from langchain_core.documents import Document
+
+documents = []
+with open("output_folder/input_docstore.jsonl", "r", encoding="utf-8") as f:
+    for line in f:
+        data = json.loads(line)
+        documents.append(Document(
+            page_content=data.get("full_content", ""),
+            metadata=data.get("metadata", {})
+        ))
+
+# 存入向量数据库
+# vectorstore = Chroma.from_documents(documents, embedding_model)
+```
+
 ## 🛠️ 项目结构
 
 ```text
 rag_enhanced_caption/
-├── orchestrate.py                   # 端到端的 Parent-Child RAG 流水线演示脚本
+├── cli.py                           # 命令行界面 (主入口)
 ├── src/
-│   ├── rag_enhanced_caption/        # 顶层包目录
-│   │   ├── chunker/                 # 结构感知的语义分块模块
-│   │   └── enhancer/                # 视觉到文本的多模态增强模块
-│   └── semantic_chunking_standalone/# 独立的语义分块逻辑（兼容外部引用）
+│   ├── example_orchestrator.py      # 端到端的 Parent-Child RAG 流水线演示脚本
+│   └── rag_enhanced_caption/        # 顶层包目录
+│       ├── chunker/                 # 结构感知的语义分块模块
+│       └── enhancer/                # 视觉到文本的多模态增强模块
 └── tests/                           # 统一的单元与集成测试套件
 ```
 
