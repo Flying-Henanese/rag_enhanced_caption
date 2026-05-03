@@ -177,15 +177,18 @@ with open("output_folder/input_docstore.jsonl", "r", encoding="utf-8") as f:
 # vectorstore = Chroma.from_documents(documents, embedding_model)
 ```
 
-### 5. LlamaIndex 高阶检索演示 (全局多叉树 + 自动合并)
+### 5. 高级生态对接演示：框架无关与 LlamaIndex 自动合并
 
-为了充分发挥本工具包生成的层级数据优势，我们在 `examples/` 目录下提供了一个高阶的评测套件。
+**核心架构原则：极致的解耦**
+请注意，本工具包的核心模块（`chunker` 和 `enhancer`）是完全**框架无关（Framework-Agnostic）**的。它们内部没有任何对 LlamaIndex 或 LangChain 的硬编码依赖。它们只负责产生最高质量的、带有 AST 标题路径前缀的纯净 JSONL 数据。
 
-区别于传统的按字数切分，该方案动态地从 `_docstore.jsonl` 中还原出一棵 **Markdown AST 全局多叉树**，并结合 LlamaIndex 的 `AutoMergingRetriever` 实现了极高精度的检索与召回：
+下游消费方拿到这份包含了完美结构信息的 `_docstore.jsonl` 后，可以**丝滑地还原出任意复杂度的 RAG 检索结构**。我们在 `examples/` 目录下提供了一个 LlamaIndex 高阶应用的极佳范例：
+
+在 `examples/llama_index_advanced_rag.py` 中，我们展示了如何通过读取 `_docstore.jsonl` 中的标题路径（如 `### 核心组件|架构设计`），动态地在内存中还原出一棵 **Markdown AST 全局多叉树**，并无缝接管给 LlamaIndex 的 `AutoMergingRetriever`，实现了极高精度的检索与召回：
 1. **入库 (Indexing)**：向量数据库中仅存入无噪音的“子节点”（AI 意图摘要）。
 2. **检索与合并 (Retrieval & Auto-Merging)**：当用户的查询命中这些短小精炼的摘要时，检索器会自动沿着 AST 树干向上攀爬。如果同属于一个大章节的多个段落被命中，它会自动将它们合并，最终把完整的“父节点”（包含 Markdown 源码、表格和 VLM 深度分析的完整 H1/H2 章节）喂给大模型。
 
-您可以直接运行对比评测脚本，直观体验这种 Small-to-Big 检索机制在事实抽取和宏观理解上对传统基线方案的“降维打击”：
+您可以直接运行对比评测脚本，直观体验这种“只输出纯净数据，由下游丝滑接管”的机制对传统基线方案的“降维打击”：
 ```bash
 uv run python examples/evaluate_recall.py
 ```

@@ -2372,6 +2372,7 @@ dev = [
 integrations = [
     { name = "langchain-core" },
     { name = "llama-index-core" },
+    { name = "llama-index-embeddings-openai" },
 ]
 local = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }, marker = "python_full_version < '3.11'" },
@@ -2394,6 +2395,7 @@ requires-dist = [
     { name = "langchain-core", marker = "extra == 'integrations'" },
     { name = "llama-index-core", marker = "extra == 'integrations'" },
     { name = "llama-index-embeddings-openai", specifier = ">=0.6.0" },
+    { name = "llama-index-embeddings-openai", marker = "extra == 'integrations'", specifier = ">=0.6.0" },
     { name = "loguru", specifier = ">=0.7.0" },
     { name = "markdown-it-py", specifier = ">=3.0.0" },
     { name = "mdit-py-plugins", specifier = ">=0.5.0" },
