@@ -100,6 +100,18 @@ class MarkdownMultimodalProcessor:
                 table_md = "\n".join(lines[token.map[0]:token.map[1]])
                 tasks.append(self._task_table(md_content, table_md, target_idx=i, target_line=target_line))
 
+            # 3. 扫描 HTML 格式的表格
+            if token.type == "html_block" and token.map:
+                html_content = token.content.lower()
+                # 判断 HTML 块中是否包含 <table> 标签
+                if "<table" in html_content:
+                    # 对于嵌套在 <div> 内部的 table，markdown-it-py 可能会把整个 <div> 当作一个 html_block
+                    target_line = token.map[1]
+                    # 将 html 源码作为表格内容送给模型处理
+                    table_html = "\n".join(lines[token.map[0]:token.map[1]])
+                    logger.info(f"Detected HTML table at line {target_line}")
+                    tasks.append(self._task_table(md_content, table_html, target_idx=i, target_line=target_line))
+
         # 并发执行所有解析任务
         results = await asyncio.gather(*tasks)
         

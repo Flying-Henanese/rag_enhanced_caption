@@ -1,11 +1,15 @@
 import json
 import os
+import requests
+from typing import List, Optional
+from pydantic import Field
 from pathlib import Path
 from loguru import logger
 from dotenv import load_dotenv
 
 from llama_index.core import Document, VectorStoreIndex, Settings
-from llama_index.core.schema import TextNode, IndexNode
+from llama_index.core.schema import TextNode, IndexNode, NodeWithScore, QueryBundle
+from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from llama_index.core.retrievers import RecursiveRetriever
 from llama_index.core.node_parser import SentenceSplitter
 
@@ -13,6 +17,49 @@ load_dotenv()
 logger.remove()
 import sys
 logger.add(sys.stderr, level="WARNING")
+
+class SiliconFlowRerank(BaseNodePostprocessor):
+    api_key: str = Field(default="")
+    endpoint: str = Field(default="https://api.siliconflow.cn/v1/rerank")
+    model: str = Field(default="Pro/BAAI/bge-reranker-v2-m3")
+    top_n: int = Field(default=2)
+
+    def _postprocess_nodes(
+        self,
+        nodes: List[NodeWithScore],
+        query_bundle: Optional[QueryBundle] = None,
+    ) -> List[NodeWithScore]:
+        if query_bundle is None or not nodes:
+            return nodes
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        texts = [node.node.get_content() for node in nodes]
+        payload = {
+            "model": self.model,
+            "query": query_bundle.query_str,
+            "documents": texts,
+            "return_documents": False
+        }
+        
+        try:
+            response = requests.post(self.endpoint, json=payload, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            results = data.get("results", [])
+            new_nodes = []
+            for result in results:
+                idx = result["index"]
+                score = result["relevance_score"]
+                nodes[idx].score = score
+                new_nodes.append(nodes[idx])
+            new_nodes.sort(key=lambda x: x.score or 0.0, reverse=True)
+            return new_nodes[:self.top_n]
+        except Exception as e:
+            logger.error(f"Rerank failed: {e}")
+            return nodes[:self.top_n]
 
 embed_model_name = os.getenv("EMBEDDING_MODEL_NAME")
 if embed_model_name:
@@ -26,14 +73,16 @@ if embed_model_name:
         Settings.embed_model = OpenAIEmbedding(
             model_name=embed_model_name,
             api_key=api_key,
-            api_base=endpoint
+            api_base=endpoint,
+            embed_batch_size=64
         )
     except ImportError:
         pass
 
 RESOURCE_DIR = Path("test_resource")
-DOCSTORE_PATH = RESOURCE_DIR / "高性能文档解析方案 2e2848cda67f8020abf0d58252a28708_docstore.jsonl"
-ORIGINAL_MD_PATH = RESOURCE_DIR / "高性能文档解析方案 2e2848cda67f8020abf0d58252a28708.md"
+OUTPUT_DIR = Path("output")
+DOCSTORE_PATH = OUTPUT_DIR / "rag-anything_docstore.jsonl"
+ORIGINAL_MD_PATH = RESOURCE_DIR / "rag-anything.md"
 
 def get_baseline_components():
     with open(ORIGINAL_MD_PATH, "r", encoding="utf-8") as f:
@@ -42,7 +91,7 @@ def get_baseline_components():
     parser = SentenceSplitter(chunk_size=512, chunk_overlap=20)
     nodes = parser.get_nodes_from_documents([doc])
     index = VectorStoreIndex(nodes)
-    retriever = index.as_retriever(similarity_top_k=1)
+    retriever = index.as_retriever(similarity_top_k=2)
     return nodes, retriever
 
 def get_advanced_components():
@@ -96,7 +145,7 @@ def get_advanced_components():
             docstore_nodes[current_parent_id].relationships.setdefault(NodeRelationship.CHILD, []).append(RelatedNodeInfo(node_id=node_id))
             docstore_nodes[node_id] = chunk_node
             
-            if sample_parent is None and "mineru-api" in full_text:
+            if sample_parent is None and "RAG-Anything" in full_text:
                 sample_parent = data
                 
             search_node = TextNode(
@@ -126,7 +175,7 @@ def get_advanced_components():
             docstore_nodes[node_id] = child_node
             leaf_nodes.append(child_node)
             
-            if sample_child is None and "系统架构" in child_node.text:
+            if sample_child is None and "Framework" in child_node.text:
                 sample_child = data
 
     if not sample_parent: sample_parent = [d for d in docstore_records if d["type"] == "parent"][0]
@@ -148,7 +197,8 @@ def get_advanced_components():
     storage_context = StorageContext.from_defaults(docstore=docstore)
 
     vector_index = VectorStoreIndex(leaf_nodes, storage_context=storage_context)
-    vector_retriever = vector_index.as_retriever(similarity_top_k=2)
+    # Increased top_k for vector retriever to give reranker more options
+    vector_retriever = vector_index.as_retriever(similarity_top_k=20)
 
     auto_merging_retriever = AutoMergingRetriever(
         vector_retriever,
@@ -157,7 +207,17 @@ def get_advanced_components():
         simple_ratio_thresh=0.3
     )
     
-    return sample_parent, sample_child, vector_retriever, auto_merging_retriever
+    reranker = None
+    rerank_api_key = os.getenv("RERANK_API_KEY")
+    if rerank_api_key:
+        reranker = SiliconFlowRerank(
+            api_key=rerank_api_key,
+            endpoint=os.getenv("RERANK_ENDPOINT", "https://api.siliconflow.cn/v1/rerank"),
+            model=os.getenv("RERANK_MODEL_NAME", "Pro/BAAI/bge-reranker-v2-m3"),
+            top_n=3
+        )
+    
+    return sample_parent, sample_child, vector_retriever, auto_merging_retriever, reranker
 
 def print_box(title, content):
     print(f"\n┌── {title} {'─'*(60-len(title))}")
@@ -165,9 +225,7 @@ def print_box(title, content):
         print(f"│ {line[:90] + '...' if len(line) > 90 else line}")
     print(f"└{'─'*64}")
 
-def run_narrative_evaluation():
-    query = "该文档中包含了一个系统架构图，请问这个系统架构图的核心组件包含哪些？它的作用是什么？"
-    
+def run_narrative_evaluation(query: str):
     print("\n=========================================================================================")
     print(f" 🎯 评测问题: {query}")
     print("=========================================================================================")
@@ -180,51 +238,38 @@ def run_narrative_evaluation():
     print("="*80)
     
     base_nodes, base_retriever = get_baseline_components()
-    sample_base_node = [n for n in base_nodes if "系统架构图" in n.text or "mineru-api" in n.text]
-    if not sample_base_node: sample_base_node = base_nodes
     
-    print("\n【Step 1. 切分 (Chunking)】")
-    print_box("原始切片 (TextNode)", sample_base_node[0].text[:300] + "\n...")
-    
-    print("\n【Step 2. 入库 (Indexing)】")
-    
-    print("\n【Step 3. 检索 (Retrieval)】")
-    base_result = base_retriever.retrieve(query)[0]
-    score_val = base_result.score if base_result.score is not None else 0.0
-    print_box(f"命中节点 (Score: {score_val:.4f})", base_result.node.text[:200] + "\n...")
-    
-    print("\n【Step 4. 召回 (Recall & Generation)】")
+    print("\n【检索 (Retrieval)】")
+    base_results = base_retriever.retrieve(query)
+    for i, base_result in enumerate(base_results):
+        score_val = base_result.score if base_result.score is not None else 0.0
+        print_box(f"命中节点 {i+1} (Score: {score_val:.4f})", base_result.node.text[:200] + "\n...")
     
     # ---------------------------------------------------------
     # 方案 B: 我们的方案 (Global Tree + AutoMerging)
     # ---------------------------------------------------------
     print("\n\n" + "="*80)
-    print(" ✅ 方案 B: 我们的方案 (AST 全局多叉树 + AutoMerging 自动合并)")
+    print(" ✅ 方案 B: 我们的方案 (AST 全局多叉树 + AutoMerging 自动合并 + 可选 Rerank)")
     print("="*80)
     
-    sample_parent, sample_child, adv_vector_retriever, adv_auto_merging_retriever = get_advanced_components()
+    sample_parent, sample_child, adv_vector_retriever, adv_auto_merging_retriever, reranker = get_advanced_components()
     
-    print("\n【Step 1. 结构化多叉树切分 (Global Tree Hierarchy Chunking)】")
-    print("抛弃扁平切分，基于 Markdown 标题构建了一棵真正的树：Root -> 章节 (H1/H2) -> 物理段落 -> AI 摘要/纯文本锚点。")
-    print_box("树的最底层：AI 意图叶子节点", sample_child["text_for_embedding"])
-    print_box("树的倒数第二层：完整段落节点", sample_parent["full_content"][:300] + "\n...")
-    
-    print("\n【Step 2. 叶子节点入库 (Leaf Indexing)】")
-    print("只将树的最底层（精炼纯粹的短文本）送入向量数据库，作为无噪音的搜索锚点。")
-    
-    print("\n【Step 3. 检索 (Vector Retrieval)】")
-    child_result = adv_vector_retriever.retrieve(query)[0]
-    score_val = child_result.score if child_result.score is not None else 0.0
-    print_box(f"向量库精准命中底层锚点 (Score: {score_val:.4f})", child_result.node.text)
-    
-    print("\n【Step 4. 自动向上合并召回 (Auto-Merging & Recall)】")
-    print("AutoMergingRetriever 感知到叶子节点被命中，开始沿着我们建立的树干向上攀爬！")
-    print("如果多个段落命中，它甚至会合并出整个 H1/H2 章节！")
-    
-    # We set top_k=2 on vector_retriever. If both leaf hits belong to the same parent, they merge.
+    print("\n【自动向上合并召回与精排 (Auto-Merging & Reranking)】")
     final_results = adv_auto_merging_retriever.retrieve(query)
+    
+    if reranker:
+        print(f"使用 {reranker.model} 模型进行精排...")
+        final_results = reranker.postprocess_nodes(final_results, query_bundle=QueryBundle(query_str=query))
+    
     for i, final_result in enumerate(final_results):
-        print_box(f"最终喂给大模型的豪华上下文 (Merged Node {i+1})", final_result.node.text[:500] + "\n...")
+        score_info = f", Rerank Score: {final_result.score:.4f}" if reranker and final_result.score is not None else ""
+        print_box(f"最终召回豪华上下文 (Merged Node {i+1}{score_info})", final_result.node.text[:500] + "\n...")
 
 if __name__ == "__main__":
-    run_narrative_evaluation()
+    queries = [
+        "RAG-Anything 的架构图（Framework）展示了哪些主要的处理阶段？",
+        "针对数学表达式（Mathematical Expression），系统是如何提供原生支持的？",
+        "LiteWrite 是什么？它和项目有什么关系？"
+    ]
+    for q in queries:
+        run_narrative_evaluation(q)

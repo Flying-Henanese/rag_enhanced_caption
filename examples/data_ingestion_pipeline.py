@@ -147,9 +147,12 @@ async def process_document(file_path: str):
     # --- 阶段 3: 构建层级记录并保存 ---
     logger.info("Phase 3: Building Parent-Child Hierarchy & Persistence")
     
-    index_path = file_path.parent / f"{file_path.stem}_index.jsonl"
-    docstore_path = file_path.parent / f"{file_path.stem}_docstore.jsonl"
-    enhanced_md_path = file_path.parent / f"{file_path.stem}_enhanced.md"
+    output_dir = root_dir / "output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    index_path = output_dir / f"{file_path.stem}_index.jsonl"
+    docstore_path = output_dir / f"{file_path.stem}_docstore.jsonl"
+    enhanced_md_path = output_dir / f"{file_path.stem}_enhanced.md"
 
     with open(index_path, "w", encoding="utf-8") as f_idx, \
          open(docstore_path, "w", encoding="utf-8") as f_doc, \
@@ -195,5 +198,5 @@ async def process_document(file_path: str):
     logger.info(f"Total time: {time.time() - start_time:.2f}s")
 
 if __name__ == "__main__":
-    TARGET_MD_FILE = "test_resource/高性能文档解析方案 2e2848cda67f8020abf0d58252a28708.md"
+    TARGET_MD_FILE = "test_resource/rag-anything.md"
     asyncio.run(process_document(TARGET_MD_FILE))
