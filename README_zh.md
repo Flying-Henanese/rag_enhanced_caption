@@ -89,6 +89,10 @@ VLM_MODEL_NAME=Qwen/Qwen3-VL-8B-Instruct
 EMBEDDING_API_KEY=your_key_here
 EMBEDDING_ENDPOINT=https://api.siliconflow.cn/v1/embeddings
 EMBEDDING_MODEL_NAME=BAAI/bge-m3
+# 如果配置了结合远程 Rerank 模型的精排：
+RERANK_API_KEY=your_key_here
+RERANK_ENDPOINT=https://api.siliconflow.cn/v1/rerank
+RERANK_MODEL_NAME=Pro/BAAI/bge-reranker-v2-m3
 ```
 
 ### 1. 命令行工具使用 (推荐)
