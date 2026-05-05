@@ -39,8 +39,9 @@ dependencies = [
     "beautifulsoup4>=4.14.3",
     "nltk>=3.9.4",
     "scikit-learn>=1.7.2",
-    "pytest>=9.0.3",
-    "llama-index-embeddings-openai>=0.6.0",
+    "numpy>=2.2.6",
+    "requests>=2.33.1",
+    "python-dotenv>=1.2.2",
 ]
 
 [project.urls]
@@ -56,6 +57,14 @@ local = [
 integrations = [
     "langchain-core",
     "llama-index-core",
+    "llama-index-embeddings-openai>=0.6.0",
+]
+demo = [
+    "fastapi>=0.136.1",
+    "uvicorn>=0.46.0",
+    "python-multipart>=0.0.27",
+    "llama-index-core>=0.14.21",
+    "llama-index-postprocessor-siliconflow-rerank>=0.4.0",
     "llama-index-embeddings-openai>=0.6.0",
 ]
 dev = [
@@ -74,4 +83,5 @@ dev = [
     "numpy>=2.2.6",
     "pytest>=8.0.0",
     "python-dotenv>=1.0.0",
+    "ruff>=0.15.12",
 ]
