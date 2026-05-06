@@ -98,7 +98,7 @@ async def build_advanced_rag_index(
     处理全流程：分块 -> VLM 增强 -> 构建「层级 AST 树（Section -> Chunk -> Leaf）」 -> 建立向量索引
     返回供检索的 VectorStoreIndex, StorageContext 和供 UI 渲染的 results
     """
-    # 1. 语义分块 (保持 example 中较大的颗粒度)
+    # 1. 语义分块 (返回包含 metadata 的纯净结构字典)
     chunks = chunk_markdown(
         markdown_content=md_content,
         file_id=session_id,
@@ -119,15 +119,17 @@ async def build_advanced_rag_index(
         # 执行增强
         enriched_text = await processor.enrich_markdown(chunk["content"], base_dir=base_dir)
         
-        # 处理原始与净化文本
+        # 处理净化文本
         clean_content = _IMAGE_ANALYSIS_RE.sub("", enriched_text)
         clean_content = re.sub(r"<details>.*?</details>", "", clean_content, flags=re.DOTALL).strip()
         
         chunk_id = f"chunk_{i}_{session_id}"
         
-        # ----- a. 解析 Heading 建立 Section 树状结构 (Example 核心能力) -----
-        first_line = clean_content.split('\n')[0].strip()
-        match = re.match(r'^#+\s+(.*)', first_line)
+        # ----- a. 解析 Heading 建立 Section 树状结构 (从 metadata 获取) -----
+        header_str = chunk["metadata"].get("header", "")
+        element_type = chunk["metadata"].get("element_type", "text")
+        
+        match = re.match(r'^#+\s+(.*)', header_str)
         levels = match.group(1).split('|') if match else ["默认文档"]
         
         current_parent_id = None
@@ -136,7 +138,6 @@ async def build_advanced_rag_index(
             level = level.strip()
             current_path = f"{current_path}|{level}" if current_path else level
             if current_path not in path_nodes:
-                # Use string replacement to avoid hashing issues, making ID predictable
                 safe_path = current_path.replace("|", "_").replace(" ", "")
                 sect_id = f"path_{safe_path}_{session_id}"
                 # 初始化为临时占位符，稍后聚合子节点内容
@@ -151,11 +152,21 @@ async def build_advanced_rag_index(
             
             current_parent_id = path_nodes[current_path]
             
+        # 拼接 header 和 content 作为最终呈现给 Node 的完整内容
+        full_node_text = f"{header_str}\n\n{enriched_text}" if header_str else enriched_text
+        full_clean_text = f"{header_str}\n\n{clean_content}" if header_str else clean_content
+
         # ----- b. 建立段落主干 Node -----
         chunk_node = TextNode(
             id_=chunk_id,
-            text=enriched_text,
-            metadata={"type": "chunk", "full_content": enriched_text, "ui_id": str(i), "path": current_path}
+            text=full_node_text,
+            metadata={
+                "type": "chunk", 
+                "element_type": element_type,
+                "full_content": full_node_text, 
+                "ui_id": str(i), 
+                "path": current_path
+            }
         )
         # 连接段落 -> Section
         chunk_node.relationships[NodeRelationship.PARENT] = RelatedNodeInfo(node_id=current_parent_id)
@@ -164,8 +175,8 @@ async def build_advanced_rag_index(
         
         # ----- c. 建立搜索钩子 Leaves -----
         
-        # C-1. 纯文本钩子 (搜索干净内容，防止 AI 标签引入噪音)
-        search_node = TextNode(id_=f"search_txt_{chunk_id}", text=clean_content)
+        # C-1. 纯文本钩子 (搜索干净内容)
+        search_node = TextNode(id_=f"search_txt_{chunk_id}", text=full_clean_text)
         search_node.relationships[NodeRelationship.PARENT] = RelatedNodeInfo(node_id=chunk_id)
         chunk_node.relationships.setdefault(NodeRelationship.CHILD, []).append(RelatedNodeInfo(node_id=search_node.id_))
         docstore_nodes[search_node.id_] = search_node
@@ -192,7 +203,7 @@ async def build_advanced_rag_index(
         ui_results.append({
             "id": str(i),
             "original_content": chunk["content"],
-            "enriched_content": enriched_text,
+            "enriched_content": full_node_text,
             "images": images,
             "metadata": chunk.get("metadata", {})
         })
@@ -235,7 +246,7 @@ def retrieve_advanced(
     """
     vector_retriever = index.as_retriever(similarity_top_k=top_k)
     
-    # 开启自动向上合并能力 (将阈值提高到 0.5，要求至少一半子节点命中才合并，减少无关干扰)
+    # 开启自动向上合并能力 (将阈值提高到 0.5，要求至少一半子节点命中才合并)
     auto_merging_retriever = AutoMergingRetriever(
         vector_retriever,
         storage_context,
@@ -259,7 +270,7 @@ def retrieve_advanced(
     else:
         nodes = nodes[:rerank_top_n]
         
-    # 3. 封装返回给 API (判断是否合并了宏观章节)
+    # 3. 封装返回给 API
     results = []
     for node in nodes:
         node_text = node.node.get_content()
@@ -270,7 +281,7 @@ def retrieve_advanced(
         
         results.append({
             "chunk_id": node.node.id_,
-            "content": node_text,  # 可能是单个片段，也可能是整章合并
+            "content": node_text, 
             "ui_id": ui_id,
             "score": float(node.score or 0.0),
             "is_merged_section": is_merged_section

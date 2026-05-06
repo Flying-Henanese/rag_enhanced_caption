@@ -2,45 +2,58 @@
 语义分块调度器模块。
 
 负责对外提供高层接口，它对底层的 `semantic.chunk_markdown` 核心函数进行包装，
-在其返回纯文本切片的基础上，追加文件来源、索引等元数据（metadata），
+在其返回结构化对象的基础上，追加文件来源、索引等全局元数据（metadata），
 使其输出格式满足向量数据库存入的标准格式。
 """
 from __future__ import annotations
 
 from typing import Any
+import copy
 
 from .parsers import semantic
+from .schema import SemanticChunk
 
 
-def _build_chunk_records(text_chunks: list[str], file_id: str, filename: str) -> list[dict[str, Any]]:
+def _build_chunk_records(semantic_chunks: list[SemanticChunk], file_id: str, filename: str) -> list[dict[str, Any]]:
     """
-    将纯文本切片转换为带元数据的结构化记录字典。
+    将语义块转换为带全局元数据的结构化记录字典。
     
     Args:
-        text_chunks: 切分后的纯文本字符串列表。
+        semantic_chunks: 结构化语义块列表。
         file_id: 文档在系统中的唯一标识。
         filename: 文档的原始文件名。
         
     Returns:
-        包含 id, content, file_id, filename, chunk_index, source, chunk_id 等信息的字典列表。
+        包含 id, content, file_id, filename, chunk_index, source, chunk_id 以及 header, element_type 的字典列表。
     """
     records: list[dict[str, Any]] = []
 
-    for idx, chunk_content in enumerate(text_chunks):
-        text = (chunk_content or "").strip()
-        # 跳过空切片
+    for idx, chunk in enumerate(semantic_chunks):
+        text = (chunk.content or "").strip()
         if not text:
             continue
 
+        # 将 SemanticChunk 特有的 metadata 与全局 metadata 合并
+        chunk_metadata = copy.deepcopy(chunk.metadata)
+        chunk_metadata.update({
+            "header": chunk.header,
+            "element_type": chunk.element_type,
+            "file_id": file_id,
+            "filename": filename,
+            "chunk_index": idx,
+            "source": filename,
+        })
+
         records.append(
             {
-                "id": f"{file_id}_chunk_{idx}",      # 全局唯一块ID
-                "content": text,                     # 核心文本内容
-                "file_id": file_id,                  # 关联文件ID
-                "filename": filename,                # 来源文件名
-                "chunk_index": idx,                  # 块的顺序索引
-                "source": filename,                  # 数据源标识
-                "chunk_id": f"{file_id}_chunk_{idx}", # 备用块ID
+                "id": f"{file_id}_chunk_{idx}",      
+                "content": text,                     
+                "file_id": file_id,                  
+                "filename": filename,                
+                "chunk_index": idx,                  
+                "source": filename,                  
+                "chunk_id": f"{file_id}_chunk_{idx}", 
+                "metadata": chunk_metadata,
             }
         )
 
@@ -57,7 +70,7 @@ def chunk_markdown(
     """
     语义化切分 Markdown 并返回带元数据的记录。
     
-    该函数是外部系统（如 FastAPI 接口、Celery Worker）调用语义分块的首选入口点。
+    该函数是外部系统调用语义分块的首选入口点。
     
     Args:
         markdown_content: 原始 Markdown 字符串。
@@ -67,9 +80,7 @@ def chunk_markdown(
         embed_fn: 传入的向量化函数（用于后续的文本向量聚类）。不传会自动加载默认客户端。
         
     Returns:
-        一系列经过清洗、封装、带有完整上下文路径的结构化文本记录。
+        一系列经过清洗、封装、带有完整上下文路径和元素类型的结构化记录字典。
     """
-    # 核心调用：使用语义解析器对 Markdown 执行分块
-    text_chunks = semantic.chunk_markdown(markdown_content, parser_config, embed_fn)
-    # 结果封装：将纯文本包装成标准字典格式
-    return _build_chunk_records(text_chunks, file_id, filename)
+    semantic_chunks = semantic.chunk_markdown(markdown_content, parser_config, embed_fn)
+    return _build_chunk_records(semantic_chunks, file_id, filename)

@@ -208,11 +208,11 @@ def test_semantic_chunking_with_full_sample_assertions(remote_embed_fn, sample_m
     针对完整原始长文档的深度逻辑断言。
     
     测试目标：
-    1. 切分逻辑正常运行且生成一定数量的片段。
-    2. 验证标题路径的正确级联与合并（如 '# 核心技术亮点|4. 上下文感知的标题聚合'）。
-    3. 表格片段附带特有标识并保持结构的封闭。
-    4. 代码块（JSON）在切分后依然完好，不破坏花括号等字符。
-    5. 无相关性的段落（首部与尾部）实现了正确的语义隔离（防止过度合并）。
+    1. 切分逻辑正常运行且生成一定数量的 SemanticChunk 对象。
+    2. 验证标题路径的正确级联与合并。
+    3. 表格片段作为 Metadata (element_type) 被正确抽取。
+    4. 代码块（JSON）在切分后依然完好。
+    5. 无相关性的段落实现了正确的语义隔离。
     6. 所有重要技术关键词未在处理过程中丢失。
     """
     parser_config = {"chunk_token_num": 500}
@@ -226,54 +226,48 @@ def test_semantic_chunking_with_full_sample_assertions(remote_embed_fn, sample_m
     assert len(chunks) >= 8, f"切分数量不足，实际: {len(chunks)}"
 
     # 2. 验证深度嵌套路径聚合 (Level 2 -> Level 3)
-    # 定位“标题聚合”章节，它属于“核心技术亮点”
-    context_chunks = [c for c in chunks if "保留”父级标题-子标题”的完整路径" in c]
+    context_chunks = [c for c in chunks if "保留”父级标题-子标题”的完整路径" in c.content]
     assert context_chunks, "未找到 '上下文感知的标题聚合' 相关片段"
-    header_line = context_chunks[0].split("\n")[0]
+    header_line = context_chunks[0].header
     assert "核心技术亮点" in header_line, "丢失二级标题父路径"
     assert "上下文感知的标题聚合" in header_line, "丢失三级标题自身路径"
     assert "|" in header_line, "路径分隔符缺失"
 
-    # 3. 验证复杂表格处理
-    # 查找“架构设计”中的表格内容
-    arch_table_chunks = [c for c in chunks if "mineru-api" in c]
+    # 3. 验证复杂表格结构处理及其 metadata 提取
+    arch_table_chunks = [c for c in chunks if "mineru-api" in c.content]
     assert arch_table_chunks, "架构设计表格丢失"
-    # 标题中不应再出现控制标签
-    assert all("|Table" not in c.split("\n")[0] for c in arch_table_chunks), "标题仍包含控制标签 |Table"
-    assert "|" in arch_table_chunks[0].split("\n")[2], "表格 Markdown 结构不完整"
+    assert arch_table_chunks[0].element_type == "Table", "表格未被正确赋予 'Table' 元素类型"
+    assert "|" in arch_table_chunks[0].content.split("\n")[2], "表格 Markdown 结构不完整"
 
     # 4. 验证 JSON 代码块完整性
-    json_chunks = [c for c in chunks if "bbox" in c]
+    json_chunks = [c for c in chunks if "bbox" in c.content]
     assert json_chunks, "JSON 代码块在切分中丢失"
-    assert "page_idx" in json_chunks[0] and "70" in json_chunks[0], "JSON 内部字段或数值丢失"
+    assert "page_idx" in json_chunks[0].content and "70" in json_chunks[0].content, "JSON 内部字段或数值丢失"
 
     # 5. 验证语义隔离性 (预防聚类过度合并)
-    # “痛点与挑战” 是开头的背景，不应与末尾的 “应用价值” 混在一起
-    pain_chunk = [c for c in chunks if "痛点与挑战" in c][0]
-    assert "应用价值" not in pain_chunk, "语义隔离失败：开头背景与结尾总结被错误合并"
+    pain_chunk = [c for c in chunks if "痛点与挑战" in c.header][0]
+    assert "应用价值" not in pain_chunk.content and "应用价值" not in pain_chunk.header, "语义隔离失败：开头背景与结尾总结被错误合并"
 
     # 6. 核心技术名词留存验证
-    full_text = "".join(chunks)
+    full_text = "".join([c.header + c.content for c in chunks])
     for keyword in ["MinerU", "FastAPI", "Celery", "CUDA", "CANN", "Docling", "BGE Embedding"]:
         assert keyword in full_text, f"核心关键词 {keyword} 丢失"
 
-    print(f"\n[全量长样本断言通过] 验证了 {len(chunks)} 个片段。所有路径继承、表格标记、代码块及隔离逻辑均符合预期。")
+    print(f"\n[全量长样本断言通过] 验证了 {len(chunks)} 个片段。结构化对象、元数据提取及隔离逻辑均符合预期。")
 
 def test_remote_api_smoke_with_full_sample(remote_embed_fn, sample_markdown):
     """
     冒烟测试：验证远程 API 对全量长样本的处理能力。
-    简单确认是否能无错跑通且输出包含关键内容，适合排查网络、权限等基础连接问题。
+    简单确认是否能无错跑通且输出包含关键内容。
     """
     chunks = semantic.chunk_markdown(sample_markdown, embed_fn=remote_embed_fn)
     assert len(chunks) > 0
-    # 简单验证关键词
-    assert "技术方案" in "".join(chunks)
+    assert "技术方案" in "".join([c.header + c.content for c in chunks])
     print(f"\n[远程 API 验证成功] 成功处理了全量长样本。")
 
 def test_demonstrate_semantic_chunking(remote_embed_fn, sample_markdown):
     """
     演示语义分块功能的执行结果并打印在标准输出中。
-    在需要查看最终形态以进行人工校验时，通常使用 `pytest -s` 命令观察本用例的打印结果。
     """
     parser_config = {"chunk_token_num": 500}
     chunks = semantic.chunk_markdown(
@@ -282,5 +276,3 @@ def test_demonstrate_semantic_chunking(remote_embed_fn, sample_markdown):
         embed_fn=remote_embed_fn
     )
     print(f"\n[语义分块演示] 成功切分了 {len(chunks)} 个片段。")
-    # 可以解除注释打印查看，配合 pytest -s
-    # print(chunks)
