@@ -50,10 +50,10 @@ Repository = "https://github.com/Flying-Henanese/rag_enhanced_caption.git"
 Issues = "https://github.com/Flying-Henanese/rag_enhanced_caption/issues"
 
 [project.optional-dependencies]
-local = [
-    "numpy>=2.2.6",
-    "sentence-transformers>=5.4.1",
-]
+# local = [
+#     "numpy>=2.2.6",
+#     "sentence-transformers>=5.4.1",
+# ]
 integrations = [
     "langchain-core",
     "llama-index-core",
