@@ -2,62 +2,67 @@
 Prompts for Markdown-based Multi-modal Enhanced Captioning
 """
 
-IMAGE_ANALYSIS_SYSTEM = "You are an expert at analyzing documents. Provide detailed, accurate descriptions and output ONLY valid JSON."
-TABLE_ANALYSIS_SYSTEM = "You are an expert at analyzing documents. Provide detailed table analysis with specific insights and output ONLY valid JSON."
+IMAGE_ANALYSIS_SYSTEM = (
+    "You are an expert data analyst and document parser. "
+    "Your goal is to extract pure semantic meaning and business entities from images. "
+    "CRITICAL RULE: DO NOT output any file names, extensions, or metadata like 'This is an image named image.png'. "
+    "Output ONLY valid JSON."
+)
+
+TABLE_ANALYSIS_SYSTEM = (
+    "You are an expert data analyst and document parser. "
+    "Your goal is to extract pure semantic meaning and business entities from tables. "
+    "Output ONLY valid JSON."
+)
 
 # 带语境的图片分析
 VISION_PROMPT_WITH_CONTEXT = """Please examine this image in conjunction with its surrounding context from the document.
 
-CRITICAL INSTRUCTION TO AVOID OCR ATTACK:
-Often, images (especially screenshots, scanned pages, or examples) contain a large amount of text. Your task is NOT to transcribe or summarize the text inside the image. 
-Instead, you MUST use the provided [章节主题] (Section Topic) and [语境信息] (Context Information) to understand WHY this image is placed here.
-Explain what the image demonstrates, proves, or illustrates in relation to the context.
+CRITICAL INSTRUCTION:
+1. DO NOT transcribe all text from the image.
+2. DO NOT mention the filename or extension.
+3. Use the provided [章节主题] (Section Topic) and [语境信息] (Context Information) to explain what the image demonstrates or proves.
+4. Extract specific technical terms, numbers, system components, or names as entities.
 
-Provide a JSON response:
+Provide a JSON response strictly matching this schema:
 {{
-    "detailed_description": "A clear description explaining the image's purpose and how it relates to the context. Focus on its structural or illustrative role rather than transcribing its text content.",
-    "entity_info": {{
-        "entity_name": "{entity_name}",
-        "entity_type": "image",
-        "summary": "1-2 sentence summary of what the image illustrates in this context"
-    }}
+    "summary": "A high-density 1-3 sentence summary explaining the core business or technical meaning of the image in this context.",
+    "entities": ["entity1", "entity2", "entity3"]
 }}
 
 Document Context:
 {context}
 
-Image Source: {image_path}
+Image Source (for your reference only, DO NOT output this): {image_path}
 """
 
 # 基础图片分析
-VISION_PROMPT = """Please analyze this image and provide a JSON response:
+VISION_PROMPT = """Please analyze this image.
 
+CRITICAL INSTRUCTION:
+1. DO NOT mention the filename or extension.
+2. Extract specific technical terms, numbers, system components, or names as entities.
+
+Provide a JSON response strictly matching this schema:
 {{
-    "detailed_description": "Detailed visual description of composition, objects, and text.",
-    "entity_info": {{
-        "entity_name": "{entity_name}",
-        "entity_type": "image",
-        "summary": "concise summary"
-    }}
+    "summary": "A high-density 1-3 sentence summary explaining the core business or technical meaning of the image.",
+    "entities": ["entity1", "entity2", "entity3"]
 }}
 
-Image Source: {image_path}
+Image Source (for your reference only, DO NOT output this): {image_path}
 """
 
 # 表格分析提示词
 TABLE_PROMPT_WITH_CONTEXT = """Please examine this table in conjunction with its surrounding context from the document.
 
-Your task is to understand the purpose of this table based on the provided [章节主题] (Section Topic) and [语境信息] (Context Information). 
-Explain what data or relationship the table illustrates in relation to the context, rather than just repeating the raw data.
+CRITICAL INSTRUCTION:
+1. Explain what data or relationship the table illustrates in relation to the context.
+2. Extract specific values, metrics, product names, or key findings as entities.
 
-Provide a JSON response:
+Provide a JSON response strictly matching this schema:
 {{
-    "detailed_description": "Analyze the table's structure and core message, heavily incorporating the context to explain WHAT the data actually represents and WHY it is significant here.",
-    "entity_info": {{
-        "entity_name": "{entity_name}",
-        "entity_type": "table",
-        "summary": "1-2 sentence summary of what the table illustrates in this context"
-    }}
+    "summary": "A high-density summary explaining the core message of the table, incorporating the context.",
+    "entities": ["entity1", "entity2", "entity3"]
 }}
 
 Document Context:
@@ -67,16 +72,20 @@ Table Data:
 {table_body}
 """
 
-TABLE_PROMPT = """Please analyze this table and provide a JSON response:
+TABLE_PROMPT = """Please analyze this table.
 
+CRITICAL INSTRUCTION:
+1. Explain the core trends, structure, or key data points.
+2. Extract specific values, metrics, or key findings as entities.
+
+Provide a JSON response strictly matching this schema:
 {{
-    "detailed_description": "Analyze table structure, trends, and key data points.",
-    "entity_info": {{
-        "entity_name": "{entity_name}",
-        "entity_type": "table",
-        "summary": "concise summary of findings"
-    }}
+    "summary": "A high-density summary of the table's findings.",
+    "entities": ["entity1", "entity2", "entity3"]
 }}
+
+Table Data:
+{table_body}
 """
 
 # ---------------------------------------------------------
@@ -85,34 +94,29 @@ TABLE_PROMPT = """Please analyze this table and provide a JSON response:
 
 VISION_PROMPT_CONCISE_WITH_CONTEXT = """Please briefly summarize this image in conjunction with its surrounding context.
 
-CRITICAL INSTRUCTION: Avoid merely transcribing text from the image. Use the [章节主题] and [语境信息] to briefly explain what the image demonstrates or illustrates.
+CRITICAL INSTRUCTION: DO NOT mention the filename. Extract core entities.
 
 Provide a concise JSON response:
 {{
-    "detailed_description": "A very brief summary (under 50 words) of the image's core illustrative purpose in relation to the context.",
-    "entity_info": {{
-        "entity_name": "{entity_name}",
-        "entity_type": "image",
-        "summary": "1-sentence summary"
-    }}
+    "summary": "A 1-sentence summary of the image's core illustrative purpose.",
+    "entities": ["entity1", "entity2"]
 }}
 
 Document Context:
 {context}
 
-Image Source: {image_path}
+Image Source (DO NOT output this): {image_path}
 """
 
-VISION_PROMPT_CONCISE = """Please briefly summarize this image. Provide a concise JSON response:
+VISION_PROMPT_CONCISE = """Please briefly summarize this image. 
 
+CRITICAL INSTRUCTION: DO NOT mention the filename.
+
+Provide a concise JSON response:
 {{
-    "detailed_description": "A very brief summary (under 50 words) of the core content of the image.",
-    "entity_info": {{
-        "entity_name": "{entity_name}",
-        "entity_type": "image",
-        "summary": "1-sentence summary"
-    }}
+    "summary": "A 1-sentence summary.",
+    "entities": ["entity1", "entity2"]
 }}
 
-Image Source: {image_path}
+Image Source (DO NOT output this): {image_path}
 """

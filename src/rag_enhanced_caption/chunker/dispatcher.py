@@ -36,18 +36,22 @@ def _build_chunk_records(semantic_chunks: list[SemanticChunk], file_id: str, fil
         # 将 SemanticChunk 特有的 metadata 与全局 metadata 合并
         chunk_metadata = copy.deepcopy(chunk.metadata)
         chunk_metadata.update({
-            "header": chunk.header,
+            "header_path": chunk.header_path,
             "element_type": chunk.element_type,
             "file_id": file_id,
             "filename": filename,
             "chunk_index": idx,
             "source": filename,
+            "parent_id": chunk.parent_id,
         })
 
         records.append(
             {
                 "id": f"{file_id}_chunk_{idx}",      
-                "content": text,                     
+                "content": text,
+                "text_for_embedding": chunk.text_for_embedding,
+                "full_content": chunk.full_content,
+                "parent_id": chunk.parent_id,
                 "file_id": file_id,                  
                 "filename": filename,                
                 "chunk_index": idx,                  

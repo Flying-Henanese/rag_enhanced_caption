@@ -228,10 +228,9 @@ def test_semantic_chunking_with_full_sample_assertions(remote_embed_fn, sample_m
     # 2. 验证深度嵌套路径聚合 (Level 2 -> Level 3)
     context_chunks = [c for c in chunks if "保留”父级标题-子标题”的完整路径" in c.content]
     assert context_chunks, "未找到 '上下文感知的标题聚合' 相关片段"
-    header_line = context_chunks[0].header
-    assert "核心技术亮点" in header_line, "丢失二级标题父路径"
-    assert "上下文感知的标题聚合" in header_line, "丢失三级标题自身路径"
-    assert "|" in header_line, "路径分隔符缺失"
+    header_path = context_chunks[0].header_path
+    assert "核心技术亮点" in header_path, "丢失二级标题父路径"
+    assert "4. 上下文感知的标题聚合" in header_path or "上下文感知的标题聚合" in header_path[1] if len(header_path) > 1 else "上下文感知的标题聚合" in header_path[0], "丢失三级标题自身路径"
 
     # 3. 验证复杂表格结构处理及其 metadata 提取
     arch_table_chunks = [c for c in chunks if "mineru-api" in c.content]
@@ -245,11 +244,11 @@ def test_semantic_chunking_with_full_sample_assertions(remote_embed_fn, sample_m
     assert "page_idx" in json_chunks[0].content and "70" in json_chunks[0].content, "JSON 内部字段或数值丢失"
 
     # 5. 验证语义隔离性 (预防聚类过度合并)
-    pain_chunk = [c for c in chunks if "痛点与挑战" in c.header][0]
-    assert "应用价值" not in pain_chunk.content and "应用价值" not in pain_chunk.header, "语义隔离失败：开头背景与结尾总结被错误合并"
+    pain_chunk = [c for c in chunks if "痛点与挑战" in c.header_path][0]
+    assert "应用价值" not in pain_chunk.content and "应用价值" not in pain_chunk.header_path, "语义隔离失败：开头背景与结尾总结被错误合并"
 
     # 6. 核心技术名词留存验证
-    full_text = "".join([c.header + c.content for c in chunks])
+    full_text = "".join(["|".join(c.header_path) + c.content for c in chunks])
     for keyword in ["MinerU", "FastAPI", "Celery", "CUDA", "CANN", "Docling", "BGE Embedding"]:
         assert keyword in full_text, f"核心关键词 {keyword} 丢失"
 
@@ -262,7 +261,7 @@ def test_remote_api_smoke_with_full_sample(remote_embed_fn, sample_markdown):
     """
     chunks = semantic.chunk_markdown(sample_markdown, embed_fn=remote_embed_fn)
     assert len(chunks) > 0
-    assert "技术方案" in "".join([c.header + c.content for c in chunks])
+    assert "技术方案" in "".join(["|".join(c.header_path) + c.content for c in chunks])
     print(f"\n[远程 API 验证成功] 成功处理了全量长样本。")
 
 def test_demonstrate_semantic_chunking(remote_embed_fn, sample_markdown):

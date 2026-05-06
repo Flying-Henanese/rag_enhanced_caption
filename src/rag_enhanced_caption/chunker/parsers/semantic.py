@@ -50,51 +50,66 @@ def _flush_content(
     embed_fn: Any,
     special_element: str | None = None,
     allow_split: bool = False,
+    state: dict | None = None,
 ) -> None:
     if not current_content:
         return
+
+    if state is None:
+        state = {"last_text_idx": -1}
 
     content = "\n".join(current_content).strip()
     if not content:
         current_content.clear()
         return
 
-    level = next((i + 1 for i in range(5, -1, -1) if title_stack[i]), 1)
-    title_path = get_title_path(title_stack)
-
+    path_list = [t for t in title_stack if t]
     element_type = _normalize_special_element(special_element)
-    
-    base_header = f"{'#' * level} {title_path}" if title_path else f"{'#' * level}"
+
+    # Determine parent_id for non-text elements
+    parent_id = str(state["last_text_idx"]) if element_type != "text" and state["last_text_idx"] != -1 else None
 
     if element_type != "text" and not allow_split:
-        result.append(SemanticChunk(
+        chunk = SemanticChunk(
             content=content,
-            header=base_header,
-            element_type=element_type
-        ))
+            full_content=content,
+            header_path=path_list.copy(),
+            element_type=element_type,
+            parent_id=parent_id
+        )
+        result.append(chunk)
     else:
         if count_tokens(content) > max_length:
             chunks = split_text_by_length_and_newline(
                 content, max_length, embed_fn=embed_fn, token_count_fn=count_tokens
             )
-            for idx, chunk in enumerate(chunks, 1):
-                header = f"{base_header} | Part {idx}"
-                result.append(SemanticChunk(
-                    content=chunk,
-                    header=header,
-                    element_type=element_type
-                ))
+            for idx, text_chunk in enumerate(chunks, 1):
+                chunk = SemanticChunk(
+                    content=text_chunk,
+                    full_content=text_chunk,
+                    header_path=path_list.copy() + [f"Part {idx}"],
+                    element_type=element_type,
+                    parent_id=parent_id if element_type != "text" else None
+                )
+                result.append(chunk)
+                if element_type == "text":
+                    state["last_text_idx"] = len(result) - 1
         else:
-            result.append(SemanticChunk(
+            chunk = SemanticChunk(
                 content=content,
-                header=base_header,
-                element_type=element_type
-            ))
+                full_content=content,
+                header_path=path_list.copy(),
+                element_type=element_type,
+                parent_id=parent_id if element_type != "text" else None
+            )
+            result.append(chunk)
+            if element_type == "text":
+                state["last_text_idx"] = len(result) - 1
 
     current_content.clear()
 
 
-def _handle_image_caption(tokens, i, result, current_content, title_stack, max_length, embed_fn):
+def _handle_image_caption(tokens, i, result, current_content, title_stack, max_length, embed_fn, state):
     token = tokens[i]
     if token.type != "paragraph_open":
         return False, i
@@ -111,10 +126,10 @@ def _handle_image_caption(tokens, i, result, current_content, title_stack, max_l
     if img_match:
         rest = content[img_match.end() :].strip()
         if rest and re.match(caption_pattern, rest, re.IGNORECASE):
-            _flush_content(result, current_content, title_stack, max_length, embed_fn)
+            _flush_content(result, current_content, title_stack, max_length, embed_fn, state=state)
             current_content.append(content)
             caption_title = rest.split("\n")[0].strip()
-            _flush_content(result, current_content, title_stack, max_length, embed_fn, special_element=caption_title)
+            _flush_content(result, current_content, title_stack, max_length, embed_fn, special_element="Image", state=state)
             return True, i + 3
 
     if re.match(image_pattern, content):
@@ -124,11 +139,10 @@ def _handle_image_caption(tokens, i, result, current_content, title_stack, max_l
             if next_inline.type == "inline":
                 next_content = next_inline.content.strip()
                 if re.match(caption_pattern, next_content, re.IGNORECASE):
-                    _flush_content(result, current_content, title_stack, max_length, embed_fn)
-                    current_content.append(content)
-                    current_content.append(next_content)
+                    _flush_content(result, current_content, title_stack, max_length, embed_fn, state=state)
+                    current_content.append(content + "\n" + next_content)
                     _flush_content(
-                        result, current_content, title_stack, max_length, embed_fn, special_element=next_content
+                        result, current_content, title_stack, max_length, embed_fn, special_element="Image", state=state
                     )
                     return True, i + 6
 
@@ -136,11 +150,17 @@ def _handle_image_caption(tokens, i, result, current_content, title_stack, max_l
         last_item = current_content[-1].strip()
         if re.match(image_pattern, last_item):
             image_tag = current_content.pop()
-            _flush_content(result, current_content, title_stack, max_length, embed_fn)
-            current_content.append(image_tag)
-            current_content.append(content)
-            _flush_content(result, current_content, title_stack, max_length, embed_fn, special_element=content)
+            _flush_content(result, current_content, title_stack, max_length, embed_fn, state=state)
+            current_content.append(image_tag + "\n" + content)
+            _flush_content(result, current_content, title_stack, max_length, embed_fn, special_element="Image", state=state)
             return True, i + 3
+
+    # If it's just a raw image without caption, emit it as an Image chunk
+    if re.match(image_pattern, content):
+        _flush_content(result, current_content, title_stack, max_length, embed_fn, state=state)
+        current_content.append(content)
+        _flush_content(result, current_content, title_stack, max_length, embed_fn, special_element="Image", state=state)
+        return True, i + 3
 
     return False, i
 
@@ -167,13 +187,14 @@ def chunk_markdown(
     result: list[SemanticChunk] = []
     current_content: list[str] = []
     title_stack: list[str] = [""] * 6
+    state = {"last_text_idx": -1}
 
     i = 0
     while i < len(tokens):
         token = tokens[i]
         
         if token.type == "heading_open":
-            _flush_content(result, current_content, title_stack, max_length, embed_fn)
+            _flush_content(result, current_content, title_stack, max_length, embed_fn, state=state)
             level = int(token.tag[1:]) if token.tag and len(token.tag) > 1 else 1
             inline_token = tokens[i + 1]
             if inline_token.type == "inline":
@@ -185,22 +206,24 @@ def chunk_markdown(
             continue
             
         elif token.type == "table_open":
-            _flush_content(result, current_content, title_stack, max_length, embed_fn)
+            _flush_content(result, current_content, title_stack, max_length, embed_fn, state=state)
             j, table_content = extract_table_block(tokens, i, original_lines)
             current_content.append(table_content)
-            _flush_content(result, current_content, title_stack, max_length, embed_fn, special_element="Table")
+            _flush_content(result, current_content, title_stack, max_length, embed_fn, special_element="Table", state=state)
             i = j + 1 if j < len(tokens) else len(tokens)
             continue
             
         elif token.type == "paragraph_open":
             handled, new_i = _handle_image_caption(
-                tokens, i, result, current_content, title_stack, max_length, embed_fn
+                tokens, i, result, current_content, title_stack, max_length, embed_fn, state
             )
             if handled:
                 i = new_i
                 continue
             inline_token = tokens[i + 1]
             if inline_token.type == "inline":
+                # For inline images inside text, we can optionally split them out.
+                # But for simplicity, if it wasn't handled by _handle_image_caption, we keep it as text.
                 current_content.append(inline_token.content.strip())
             i += 3
             continue
@@ -229,7 +252,7 @@ def chunk_markdown(
                 j += 1
             if list_content:
                 current_content.extend(list_content)
-                _flush_content(result, current_content, title_stack, max_length, embed_fn, special_element=token.type)
+                _flush_content(result, current_content, title_stack, max_length, embed_fn, special_element=token.type, state=state)
             i = j + 1
             continue
             
@@ -250,12 +273,12 @@ def chunk_markdown(
                 j += 1
             if list_content:
                 current_content.extend(list_content)
-                _flush_content(result, current_content, title_stack, max_length, embed_fn, special_element=token.type)
+                _flush_content(result, current_content, title_stack, max_length, embed_fn, special_element=token.type, state=state)
             i = j + 1
             continue
             
         elif token.type == "html_block":
-            _flush_content(result, current_content, title_stack, max_length, embed_fn)
+            _flush_content(result, current_content, title_stack, max_length, embed_fn, state=state)
             content = token.content.strip()
             is_converted_table = False
             if "<table" in content.lower():
@@ -277,9 +300,10 @@ def chunk_markdown(
                     embed_fn,
                     special_element="Table KV",
                     allow_split=True,
+                    state=state
                 )
             else:
-                _flush_content(result, current_content, title_stack, max_length, embed_fn, special_element=token.type)
+                _flush_content(result, current_content, title_stack, max_length, embed_fn, special_element="html_block", state=state)
             i += 1
             continue
             
@@ -288,15 +312,16 @@ def chunk_markdown(
             continue
             
         elif token.type == "math_block":
+            _flush_content(result, current_content, title_stack, max_length, embed_fn, state=state)
             current_content.append(f"$ {token.content} $")
-            _flush_content(result, current_content, title_stack, max_length, embed_fn, special_element="Math Block")
+            _flush_content(result, current_content, title_stack, max_length, embed_fn, special_element="Math Block", state=state)
             i += 1
             continue
             
         else:
             i += 1
 
-    _flush_content(result, current_content, title_stack, max_length, embed_fn)
+    _flush_content(result, current_content, title_stack, max_length, embed_fn, state=state)
 
     logger.info(f"语义切分完成: 共提取出 {len(result)} 个结构化块。")
     return result

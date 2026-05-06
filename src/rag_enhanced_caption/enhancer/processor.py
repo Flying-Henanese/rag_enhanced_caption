@@ -3,133 +3,73 @@ import asyncio
 from typing import Dict, Any, Optional, Callable, Awaitable, List
 from pathlib import Path
 from loguru import logger
+import re
 
 # 内部引用
-from .context_extractor import MarkdownContextExtractor
 from .json_utils import robust_json_parse
 from .image_utils import create_image_resolver
-from .markdown_utils import format_as_collapsible_block
 from . import prompts
 
 class MarkdownMultimodalProcessor:
     """
-    Markdown 多模态处理器 (功能完备版)
-    能够自动扫描并处理 Markdown 文档中的所有多模态元素，支持并发处理以提升速度。
+    Markdown 多模态处理器 (Multi-Vector 架构版)
+    负责对已被底层语义解析器分离出的 Table, Image 等独立 Chunk 进行批量 VLM 分析，
+    并将生成的纯净自然语言摘要注入到 Chunk 的 text_for_embedding 字段中。
     """
 
     def __init__(
         self, 
         vlm_func: Callable[[str, str, Optional[str]], Awaitable[str]],
-        context_extractor: Optional[MarkdownContextExtractor] = None,
-        caption_mode: str = "detailed",  # 支持 "detailed" 或 "concise"
-        max_concurrency: int = 5         # 默认最大并发数为 5
+        max_concurrency: int = 5
     ):
         self.vlm_func = vlm_func
-        self.extractor = context_extractor or MarkdownContextExtractor()
-        self.caption_mode = caption_mode
-        # 使用信号量控制同时发往 VLM 的请求数量，防止触发 429 Rate Limit
         self.semaphore = asyncio.Semaphore(max_concurrency)
 
-    async def _task_image(self, md_content: str, img_url: str, image_resolver: Callable, target_line: int):
-        """包装处理单张图片的异步任务"""
-        img_bytes = await image_resolver(img_url)
-        if not img_bytes:
-            return None
-            
-        logger.info(f"Processing image: {img_url}")
-        res = await self.process_image(md_content, img_url, img_bytes)
-        block = format_as_collapsible_block(res)
-        if block:
-            return (target_line, block)
-        return None
-
-    async def _task_table(self, md_content: str, table_md: str, target_idx: int, target_line: int):
-        """包装处理单个表格的异步任务"""
-        logger.info(f"Processing table at line {target_line}")
-        res = await self.process_table(md_content, table_md, target_idx=target_idx)
-        block = format_as_collapsible_block(res)
-        if block:
-            return (target_line, block)
-        return None
-
-    async def enrich_markdown(
+    async def enrich_chunks(
         self, 
-        md_content: str, 
+        chunks: List[Dict[str, Any]], 
         image_resolver: Optional[Callable[[str], Awaitable[Optional[bytes]]]] = None,
         base_dir: str | Path = "."
-    ) -> str:
+    ) -> List[Dict[str, Any]]:
         """
-        在 Markdown 原文的图片/表格下方直接注入 AI 解析折叠块 (并发版本)。
+        批量增强语义块。仅对 element_type 为 Table 或 Image 的子节点执行 VLM 分析。
         """
         if image_resolver is None:
             image_resolver = create_image_resolver(base_dir)
 
-        tokens = self.extractor.md.parse(md_content)
-        lines = md_content.splitlines()
-        
-        # 收集所有需要并发执行的任务
+        # 构建 ID 到 Chunk 的映射，方便查找 Parent 上下文
+        chunk_map = {chunk["id"]: chunk for chunk in chunks}
         tasks = []
 
-        for i, token in enumerate(tokens):
-            # 1. 扫描图片
-            if token.type == "inline" and token.children:
-                for child in token.children:
-                    if child.type == "image":
-                        img_url = child.attrGet("src")
-                        target_line = -1
-                        
-                        if token.map:
-                            # 方案一：在块元素的行范围内寻找实际包含该图片的行
-                            for line_offset in range(token.map[0], token.map[1]):
-                                if img_url in lines[line_offset]:
-                                    # 将目标行设置为图片所在行的下一行，即放在图片下方
-                                    target_line = line_offset + 1
-                                    break
-                            
-                            # 如果没找到 (罕见情况，例如 URL 被编码/转义导致不完全匹配)，回退到块元素的结束行
-                            if target_line == -1:
-                                target_line = token.map[1]
+        for chunk in chunks:
+            element_type = chunk["metadata"].get("element_type", "text")
+            
+            # 如果是文本块，它的 text_for_embedding 就是它自己的纯文本内容
+            if element_type == "text":
+                chunk["text_for_embedding"] = chunk["content"]
+                continue
 
-                        if target_line != -1:
-                            tasks.append(self._task_image(md_content, img_url, image_resolver, target_line))
+            # 获取父节点上下文 (Context)
+            parent_context = ""
+            parent_id = chunk["metadata"].get("parent_id")
+            if parent_id and parent_id in chunk_map:
+                parent_context = chunk_map[parent_id]["content"]
 
-            # 2. 扫描表格
-            if token.type == "table_open" and token.map:
-                # 将 target_line 从 map[0] 改为 map[1]，使得解析块插入到表格下方
-                target_line = token.map[1]
-                table_md = "\n".join(lines[token.map[0]:token.map[1]])
-                tasks.append(self._task_table(md_content, table_md, target_idx=i, target_line=target_line))
+            if element_type == "Table" or element_type == "html_block" or element_type == "Table KV":
+                tasks.append(self._process_table_chunk(chunk, parent_context))
+            
+            elif element_type == "Image":
+                tasks.append(self._process_image_chunk(chunk, parent_context, image_resolver))
+            
+            elif element_type == "Math Block":
+                # 公式可能不需要 VLM 增强，或者用特定的小模型。此处暂时保持原文。
+                chunk["text_for_embedding"] = chunk["content"]
 
-            # 3. 扫描 HTML 格式的表格
-            if token.type == "html_block" and token.map:
-                html_content = token.content.lower()
-                # 判断 HTML 块中是否包含 <table> 标签
-                if "<table" in html_content:
-                    # 对于嵌套在 <div> 内部的 table，markdown-it-py 可能会把整个 <div> 当作一个 html_block
-                    target_line = token.map[1]
-                    # 将 html 源码作为表格内容送给模型处理
-                    table_html = "\n".join(lines[token.map[0]:token.map[1]])
-                    logger.info(f"Detected HTML table at line {target_line}")
-                    tasks.append(self._task_table(md_content, table_html, target_idx=i, target_line=target_line))
+        # 并发执行所有 VLM 请求
+        if tasks:
+            await asyncio.gather(*tasks)
 
-        # 并发执行所有解析任务
-        results = await asyncio.gather(*tasks)
-        
-        # 过滤出成功的结果并组装 insertions
-        insertions = [res for res in results if res is not None]
-
-        # 按行号倒序插入，防止修改前面的行导致后面的行号错乱
-        insertions.sort(key=lambda x: x[0], reverse=True)
-        enriched_lines = list(lines)
-        for line_idx, block in insertions:
-            content = block + "\n"
-            # 插入到 target_line 的位置，相当于在这行原来内容的正上方
-            if line_idx < len(enriched_lines):
-                enriched_lines.insert(line_idx, content)
-            else:
-                enriched_lines.append(content)
-
-        return "\n".join(enriched_lines)
+        return chunks
 
     async def _analyze_element(
         self, 
@@ -140,68 +80,65 @@ class MarkdownMultimodalProcessor:
         """统一的 VLM 分析与解析逻辑（受信号量控制并发）"""
         image_base64 = base64.b64encode(image_bytes).decode("utf-8") if image_bytes else None
         try:
-            # 只有这部分实际发送网络请求的代码受 Semaphore 限制
             async with self.semaphore:
-                # 传递 image_bytes 给 vlm_func，让其可以动态检测 MIME Type
                 raw_response = await self.vlm_func(user_prompt, system_prompt, image_base64, image_bytes)
-                
+            
             result = robust_json_parse(raw_response)
             return {
-                "enhanced_caption": result.get("detailed_description", ""),
-                "entity_info": result.get("entity_info", {}),
+                "summary": result.get("summary", ""),
+                "entities": result.get("entities", []),
                 "success": True
             }
         except Exception as e:
-            logger.exception(f"VLM analysis failed due to an unhandled exception: {e}")
-            return {"success": False, "error": str(e)}
+            logger.exception(f"VLM analysis failed: {e}")
+            return {"success": False, "error": str(e), "summary": "", "entities": []}
 
-    async def process_image(
-        self, 
-        md_content: str, 
-        image_url: str, 
-        image_bytes: bytes,
-        entity_name: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """处理单张图片"""
-        context = self.extractor.extract_context(md_content, target_image_url=image_url)
-        
-        # 选择 Prompt 模板
-        is_concise = self.caption_mode == "concise"
-        if context:
-            tpl = prompts.VISION_PROMPT_CONCISE_WITH_CONTEXT if is_concise else prompts.VISION_PROMPT_WITH_CONTEXT
-            user_prompt = tpl.format(context=context, entity_name=entity_name or Path(image_url).stem, image_path=image_url)
-        else:
-            tpl = prompts.VISION_PROMPT_CONCISE if is_concise else prompts.VISION_PROMPT
-            user_prompt = tpl.format(entity_name=entity_name or Path(image_url).stem, image_path=image_url)
-
-        res = await self._analyze_element(user_prompt, prompts.IMAGE_ANALYSIS_SYSTEM, image_bytes)
-        res["url"] = image_url
-        res["context_used"] = context
-        return res
-
-    async def process_table(
-        self,
-        md_content: str,
-        table_markdown: str,
-        entity_name: Optional[str] = None,
-        target_idx: int = -1
-    ) -> Dict[str, Any]:
-        """处理单个表格"""
-        # 尝试为表格提取语境
-        context = ""
-        if target_idx != -1:
-            context = self.extractor.extract_context(md_content, target_idx=target_idx)
+    async def _process_image_chunk(self, chunk: Dict[str, Any], context: str, image_resolver: Callable) -> None:
+        """处理独立图像 Chunk"""
+        # 从内容中提取 URL (例如 ![alt](url))
+        url_match = re.search(r"!\[.*?\]\((.*?)\)", chunk["content"])
+        if not url_match:
+            chunk["text_for_embedding"] = chunk["content"]
+            return
+            
+        image_url = url_match.group(1)
+        img_bytes = await image_resolver(image_url)
+        if not img_bytes:
+            chunk["text_for_embedding"] = f"Image placeholder: {image_url}"
+            return
 
         if context:
-            user_prompt = prompts.TABLE_PROMPT_WITH_CONTEXT.format(
-                context=context,
-                entity_name=entity_name or "table_entity",
-                table_body=table_markdown
-            )
+            user_prompt = prompts.VISION_PROMPT_WITH_CONTEXT.format(context=context, image_path=image_url)
         else:
-            user_prompt = prompts.TABLE_PROMPT.format(
-                entity_name=entity_name or "table_entity",
-                table_body=table_markdown
-            )
+            user_prompt = prompts.VISION_PROMPT.format(image_path=image_url)
+
+        res = await self._analyze_element(user_prompt, prompts.IMAGE_ANALYSIS_SYSTEM, img_bytes)
         
-        return await self._analyze_element(user_prompt, prompts.TABLE_ANALYSIS_SYSTEM)
+        # 将高浓度摘要赋值给专门用来做向量的字段，彻底实现信噪分离
+        if res["success"] and res["summary"]:
+            chunk["text_for_embedding"] = res["summary"]
+            if res["entities"]:
+                chunk["metadata"]["entities"] = res["entities"]
+                chunk["text_for_embedding"] += f"\n[Keywords: {', '.join(res['entities'])}]"
+        else:
+            chunk["text_for_embedding"] = f"Image content: {image_url}"
+
+    async def _process_table_chunk(self, chunk: Dict[str, Any], context: str) -> None:
+        """处理独立表格 Chunk"""
+        table_markdown = chunk["content"]
+
+        if context:
+            user_prompt = prompts.TABLE_PROMPT_WITH_CONTEXT.format(context=context, table_body=table_markdown)
+        else:
+            user_prompt = prompts.TABLE_PROMPT.format(table_body=table_markdown)
+        
+        res = await self._analyze_element(user_prompt, prompts.TABLE_ANALYSIS_SYSTEM)
+
+        if res["success"] and res["summary"]:
+            chunk["text_for_embedding"] = res["summary"]
+            if res["entities"]:
+                chunk["metadata"]["entities"] = res["entities"]
+                chunk["text_for_embedding"] += f"\n[Keywords: {', '.join(res['entities'])}]"
+        else:
+            # 失败兜底：使用截断的表格原文
+            chunk["text_for_embedding"] = table_markdown[:500]
