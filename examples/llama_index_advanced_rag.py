@@ -1,17 +1,19 @@
 import json
 import os
 import requests
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pydantic import Field
 from pathlib import Path
 from loguru import logger
 from dotenv import load_dotenv
 
 from llama_index.core import Document, VectorStoreIndex, Settings
-from llama_index.core.schema import TextNode, IndexNode, NodeWithScore, QueryBundle
+from llama_index.core.schema import TextNode, IndexNode, NodeWithScore, QueryBundle, NodeRelationship, RelatedNodeInfo
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from llama_index.core.retrievers import RecursiveRetriever
-from llama_index.core.node_parser import SentenceSplitter
+from llama_index.core.storage.docstore import SimpleDocumentStore
+from llama_index.core import StorageContext
+from llama_index.core.retrievers import AutoMergingRetriever, BaseRetriever
 
 load_dotenv()
 logger.remove()
@@ -29,7 +31,7 @@ class SiliconFlowRerank(BaseNodePostprocessor):
         nodes: List[NodeWithScore],
         query_bundle: Optional[QueryBundle] = None,
     ) -> List[NodeWithScore]:
-        if query_bundle is None or not nodes:
+        if query_bundle is None or not nodes or not self.api_key:
             return nodes
 
         headers = {
@@ -81,143 +83,166 @@ if embed_model_name:
 
 RESOURCE_DIR = Path("test_resource")
 OUTPUT_DIR = Path("output")
-DOCSTORE_PATH = OUTPUT_DIR / "rag-anything_docstore.jsonl"
-ORIGINAL_MD_PATH = RESOURCE_DIR / "rag-anything.md"
+DOCSTORE_PATH = OUTPUT_DIR / "rag-anything_docstore_new.jsonl"
+INDEX_PATH = OUTPUT_DIR / "rag-anything_index_new.jsonl"
 
-def get_baseline_components():
-    with open(ORIGINAL_MD_PATH, "r", encoding="utf-8") as f:
-        text = f.read()
-    doc = Document(text=text, id_="doc_001")
-    parser = SentenceSplitter(chunk_size=512, chunk_overlap=20)
-    nodes = parser.get_nodes_from_documents([doc])
-    index = VectorStoreIndex(nodes)
-    retriever = index.as_retriever(similarity_top_k=2)
-    return nodes, retriever
+class RerankedRetriever(BaseRetriever):
+    """
+    包装检索器，在合并前执行精排。
+    避免超大章节被精排模型截断。
+    """
+    def __init__(self, base_retriever: BaseRetriever, reranker: Optional[BaseNodePostprocessor]):
+        self.base_retriever = base_retriever
+        self.reranker = reranker
+        super().__init__()
+        
+    def _retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
+        nodes = self.base_retriever.retrieve(query_bundle)
+        if self.reranker and nodes:
+            nodes = self.reranker.postprocess_nodes(nodes, query_bundle)
+        return nodes
 
 def get_advanced_components():
-    from llama_index.core.schema import NodeRelationship, RelatedNodeInfo
-    from llama_index.core.storage.docstore import SimpleDocumentStore
-    from llama_index.core import StorageContext
-    from llama_index.core.retrievers import AutoMergingRetriever
-    import re
-    
+    """
+    基于生成好的 JSONL 构建 LlamaIndex 检索树。
+    """
     docstore_nodes = {}
     path_nodes = {}
     leaf_nodes = []
     
-    sample_parent = None
-    sample_child = None
-    
+    # 1. 加载数据
+    doc_records = {}
     with open(DOCSTORE_PATH, "r", encoding="utf-8") as f:
-        docstore_records = [json.loads(line) for line in f]
+        for line in f:
+            data = json.loads(line)
+            doc_records[data["id"]] = data
+            
+    index_records = {}
+    with open(INDEX_PATH, "r", encoding="utf-8") as f:
+        for line in f:
+            data = json.loads(line)
+            index_records[data["id"]] = data
+
+    node_id_map = {}
+
+    # 2. 构建树状结构
+    for chunk_id, doc_data in doc_records.items():
+        header_path = doc_data.get("header_path", [])
+        element_type = doc_data.get("element_type", "text")
+        parent_id = doc_data.get("parent_id")
         
-    for data in docstore_records:
-        if data.get("type") == "parent":
-            node_id = data.get("id")
-            full_text = data.get("full_content", "")
-            
-            first_line = full_text.split('\n')[0].strip()
-            match = re.match(r'^#+\s+(.*)', first_line)
-            levels = match.group(1).split('|') if match else ["默认文档"]
-            
-            current_parent_id = None
-            current_path = ""
-            for level in levels:
-                current_path = f"{current_path}|{level}" if current_path else level
-                if current_path not in path_nodes:
-                    sect_id = f"path_{current_path}"
-                    sect_node = TextNode(id_=sect_id, text=f"【章节：{level}】")
-                    docstore_nodes[sect_id] = sect_node
-                    path_nodes[current_path] = sect_id
-                    
-                    if current_parent_id:
-                        sect_node.relationships[NodeRelationship.PARENT] = RelatedNodeInfo(node_id=current_parent_id)
-                        docstore_nodes[current_parent_id].relationships.setdefault(NodeRelationship.CHILD, []).append(RelatedNodeInfo(node_id=sect_id))
+        # a. 构建章节节点 (Path Nodes)
+        current_parent_node_id = None
+        current_path_str = ""
+        for level in header_path:
+            current_path_str = f"{current_path_str}|{level}" if current_path_str else level
+            if current_path_str not in path_nodes:
+                safe_path = current_path_str.replace("|", "_").replace(" ", "")
+                sect_id = f"path_{safe_path}"
+                sect_node = TextNode(id_=sect_id, text=f"【章节聚合：{level}】")
+                docstore_nodes[sect_id] = sect_node
+                path_nodes[current_path_str] = sect_id
                 
-                current_parent_id = path_nodes[current_path]
+                if current_parent_node_id:
+                    sect_node.relationships[NodeRelationship.PARENT] = RelatedNodeInfo(node_id=current_parent_node_id)
+                    docstore_nodes[current_parent_node_id].relationships.setdefault(NodeRelationship.CHILD, []).append(RelatedNodeInfo(node_id=sect_id))
             
-            chunk_node = TextNode(
-                id_=node_id,
-                text=full_text,
-                metadata=data.get("metadata", {})
-            )
-            chunk_node.relationships[NodeRelationship.PARENT] = RelatedNodeInfo(node_id=current_parent_id)
-            docstore_nodes[current_parent_id].relationships.setdefault(NodeRelationship.CHILD, []).append(RelatedNodeInfo(node_id=node_id))
-            docstore_nodes[node_id] = chunk_node
-            
-            if sample_parent is None and "RAG-Anything" in full_text:
-                sample_parent = data
-                
-            search_node = TextNode(
-                id_=f"search_{node_id}",
-                text=data.get("text_for_embedding", "")
-            )
-            search_node.relationships[NodeRelationship.PARENT] = RelatedNodeInfo(node_id=node_id)
-            chunk_node.relationships.setdefault(NodeRelationship.CHILD, []).append(RelatedNodeInfo(node_id=search_node.id_))
-            
-            docstore_nodes[search_node.id_] = search_node
-            leaf_nodes.append(search_node)
-            
-        elif data.get("type") == "child":
-            parent_id = data.get("parent_id")
-            node_id = data.get("id")
-            
-            child_node = TextNode(
-                id_=node_id,
-                text=data.get("text_for_embedding", ""),
-                metadata=data.get("metadata", {})
-            )
-            child_node.relationships[NodeRelationship.PARENT] = RelatedNodeInfo(node_id=parent_id)
-            
-            if parent_id in docstore_nodes:
-                docstore_nodes[parent_id].relationships.setdefault(NodeRelationship.CHILD, []).append(RelatedNodeInfo(node_id=node_id))
-            
-            docstore_nodes[node_id] = child_node
-            leaf_nodes.append(child_node)
-            
-            if sample_child is None and "Framework" in child_node.text:
-                sample_child = data
+            current_parent_node_id = path_nodes[current_path_str]
 
-    if not sample_parent: sample_parent = [d for d in docstore_records if d["type"] == "parent"][0]
-    if not sample_child: sample_child = [d for d in docstore_records if d["type"] == "child"][0]
+        # b. 构建主节点
+        if element_type == "text":
+            text_for_embed = index_records.get(chunk_id, {}).get("text_for_embedding", "")
+            node = TextNode(
+                id_=chunk_id,
+                text=text_for_embed,
+                metadata={"type": "chunk", "full_content": doc_data["full_content"]}
+            )
+            if current_parent_node_id:
+                node.relationships[NodeRelationship.PARENT] = RelatedNodeInfo(node_id=current_parent_node_id)
+                docstore_nodes[current_parent_node_id].relationships.setdefault(NodeRelationship.CHILD, []).append(RelatedNodeInfo(node_id=chunk_id))
+            
+            docstore_nodes[chunk_id] = node
+            leaf_nodes.append(node)
+            node_id_map[chunk_id] = chunk_id
+            
+        else:
+            # 独立多模态元素
+            element_node = TextNode(
+                id_=f"{chunk_id}_full",
+                text=doc_data["full_content"],
+                metadata={"type": "element"}
+            )
+            docstore_nodes[element_node.id_] = element_node
+            
+            if parent_id and parent_id in node_id_map:
+                actual_parent_id = node_id_map[parent_id]
+                element_node.relationships[NodeRelationship.PARENT] = RelatedNodeInfo(node_id=actual_parent_id)
+                docstore_nodes[actual_parent_id].relationships.setdefault(NodeRelationship.CHILD, []).append(RelatedNodeInfo(node_id=element_node.id_))
+            elif current_parent_node_id:
+                element_node.relationships[NodeRelationship.PARENT] = RelatedNodeInfo(node_id=current_parent_node_id)
+                docstore_nodes[current_parent_node_id].relationships.setdefault(NodeRelationship.CHILD, []).append(RelatedNodeInfo(node_id=element_node.id_))
 
+            # 指针节点
+            text_for_embed = index_records.get(chunk_id, {}).get("text_for_embedding", "")
+            index_node = IndexNode(
+                id_=chunk_id,
+                text=text_for_embed,
+                index_id=element_node.id_
+            )
+            docstore_nodes[index_node.id_] = index_node
+            leaf_nodes.append(index_node)
+            node_id_map[chunk_id] = element_node.id_
+
+    # c. 聚合章节文本
     sorted_paths = sorted(list(path_nodes.keys()), key=lambda x: len(x.split('|')), reverse=True)
     for path in sorted_paths:
         node_id = path_nodes[path]
         node = docstore_nodes[node_id]
-        children_info = node.relationships.get(NodeRelationship.CHILD, [])
         child_texts = []
-        for child_info in children_info:
+        for child_info in node.relationships.get(NodeRelationship.CHILD, []):
             child_node = docstore_nodes[child_info.node_id]
-            child_texts.append(child_node.text)
-        node.text = f"【章节聚合：{path.split('|')[-1]}】\n" + "\n\n".join(child_texts)
+            child_texts.append(child_node.metadata.get("full_content", child_node.text))
+        node.text = f"【章节聚合：{path.split('|')[-1]}】\n\n" + "\n\n".join(child_texts)
+        node.metadata["full_content"] = node.text
 
     docstore = SimpleDocumentStore()
     docstore.add_documents(list(docstore_nodes.values()))
     storage_context = StorageContext.from_defaults(docstore=docstore)
 
     vector_index = VectorStoreIndex(leaf_nodes, storage_context=storage_context)
-    # Increased top_k for vector retriever to give reranker more options
-    vector_retriever = vector_index.as_retriever(similarity_top_k=20)
+    vector_retriever = vector_index.as_retriever(similarity_top_k=15)
 
-    auto_merging_retriever = AutoMergingRetriever(
-        vector_retriever,
-        storage_context,
-        verbose=True,
-        simple_ratio_thresh=0.3
+    # 递归回表检索器
+    recursive_retriever = RecursiveRetriever(
+        "vector",
+        retriever_dict={"vector": vector_retriever},
+        node_dict=storage_context.docstore.docs
     )
-    
+
     reranker = None
     rerank_api_key = os.getenv("RERANK_API_KEY")
     if rerank_api_key:
         reranker = SiliconFlowRerank(
             api_key=rerank_api_key,
             endpoint=os.getenv("RERANK_ENDPOINT", "https://api.siliconflow.cn/v1/rerank"),
-            model=os.getenv("RERANK_MODEL_NAME", "Pro/BAAI/bge-reranker-v2-m3"),
+            model=os.getenv("RERANK_MODEL_NAME", "Qwen/Qwen3-Reranker-0.6B"),
             top_n=3
         )
+        
+    reranked_retriever = RerankedRetriever(
+        base_retriever=recursive_retriever,
+        reranker=reranker
+    )
+
+    # 上下文合并检索器
+    auto_merging_retriever = AutoMergingRetriever(
+        reranked_retriever,
+        storage_context,
+        verbose=True,
+        simple_ratio_thresh=0.5
+    )
     
-    return sample_parent, sample_child, vector_retriever, auto_merging_retriever, reranker
+    return vector_retriever, auto_merging_retriever, reranker
 
 def print_box(title, content):
     print(f"\n┌── {title} {'─'*(60-len(title))}")
@@ -231,35 +256,16 @@ def run_narrative_evaluation(query: str):
     print("=========================================================================================")
     
     # ---------------------------------------------------------
-    # 方案 A: 传统基线 (Baseline Naive Chunking)
+    # 方案 B: 我们的方案 (AST 全局多叉树 + 先精排 + 后自动合并)
     # ---------------------------------------------------------
     print("\n\n" + "="*80)
-    print(" ❌ 方案 A: 传统基线 (Naive Chunking)")
+    print(" ✅ 方案 B: 我们的方案 (AST 全局多叉树 + 先精排过滤 + AutoMerging 上下文合并)")
     print("="*80)
     
-    base_nodes, base_retriever = get_baseline_components()
+    adv_vector_retriever, adv_auto_merging_retriever, reranker = get_advanced_components()
     
-    print("\n【检索 (Retrieval)】")
-    base_results = base_retriever.retrieve(query)
-    for i, base_result in enumerate(base_results):
-        score_val = base_result.score if base_result.score is not None else 0.0
-        print_box(f"命中节点 {i+1} (Score: {score_val:.4f})", base_result.node.text[:200] + "\n...")
-    
-    # ---------------------------------------------------------
-    # 方案 B: 我们的方案 (Global Tree + AutoMerging)
-    # ---------------------------------------------------------
-    print("\n\n" + "="*80)
-    print(" ✅ 方案 B: 我们的方案 (AST 全局多叉树 + AutoMerging 自动合并 + 可选 Rerank)")
-    print("="*80)
-    
-    sample_parent, sample_child, adv_vector_retriever, adv_auto_merging_retriever, reranker = get_advanced_components()
-    
-    print("\n【自动向上合并召回与精排 (Auto-Merging & Reranking)】")
+    print("\n【精排过滤后触发上下文合并 (Rerank -> Auto-Merging)】")
     final_results = adv_auto_merging_retriever.retrieve(query)
-    
-    if reranker:
-        print(f"使用 {reranker.model} 模型进行精排...")
-        final_results = reranker.postprocess_nodes(final_results, query_bundle=QueryBundle(query_str=query))
     
     for i, final_result in enumerate(final_results):
         score_info = f", Rerank Score: {final_result.score:.4f}" if reranker and final_result.score is not None else ""

@@ -227,15 +227,33 @@ async def build_advanced_rag_index(
 
 # --- 3. 高级检索接口 ---
 
+from llama_index.core.retrievers import BaseRetriever
+
+class RerankedRetriever(BaseRetriever):
+    """
+    一个简单的包装检索器，用于在合并前执行精排。
+    避免超大章节被精排模型在 512 tokens 处无情截断。
+    """
+    def __init__(self, base_retriever: BaseRetriever, reranker: Optional[BaseNodePostprocessor]):
+        self.base_retriever = base_retriever
+        self.reranker = reranker
+        super().__init__()
+        
+    def _retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
+        nodes = self.base_retriever.retrieve(query_bundle)
+        if self.reranker and nodes:
+            nodes = self.reranker.postprocess_nodes(nodes, query_bundle)
+        return nodes
+
 def retrieve_advanced(
     query: str, 
     index: VectorStoreIndex, 
     storage_context: StorageContext, 
-    top_k: int = 12, 
-    rerank_top_n: int = 3
+    top_k: int = 15, 
+    rerank_top_n: int = 5
 ) -> List[Dict[str, Any]]:
     """
-    使用三级火箭：Vector Index -> Recursive (回表) -> AutoMerging (合并章节) -> Rerank
+    使用四级火箭：Vector Index -> Recursive (回表) -> Rerank (短文本高精度精排) -> AutoMerging (合并章节)
     """
     vector_retriever = index.as_retriever(similarity_top_k=top_k)
     
@@ -246,31 +264,37 @@ def retrieve_advanced(
         node_dict=storage_context.docstore.docs
     )
 
-    # 2. 树状爬升合并：如果同一个章节下被命中的子段落超过 50%，就把整个大章节丢出去
-    auto_merging_retriever = AutoMergingRetriever(
-        recursive_retriever,
-        storage_context,
-        verbose=False,
-        simple_ratio_thresh=0.5
-    )
-    
-    # 执行初筛 + 树状合并
-    nodes = auto_merging_retriever.retrieve(query)
-    
-    # 3. 精排
+    # 2. 构造精排器
+    reranker = None
     reranker_key = os.getenv("RERANK_API_KEY")
-    if reranker_key and nodes:
+    if reranker_key:
         reranker = SiliconFlowRerank(
             api_key=reranker_key,
             endpoint=os.getenv("RERANK_ENDPOINT", "https://api.siliconflow.cn/v1/rerank"),
             model=os.getenv("RERANK_MODEL_NAME", "Qwen/Qwen3-Reranker-0.6B"),
             top_n=rerank_top_n
         )
-        nodes = reranker.postprocess_nodes(nodes, query_bundle=QueryBundle(query_str=query))
-    else:
-        nodes = nodes[:rerank_top_n]
         
-    # 4. 封装返回给 API
+    # 3. 将 Rerank 包裹在 RecursiveRetriever 之后，合并之前
+    # 此时进入 Rerank 的都是短小的摘要或原始段落，绝对不会触发 512 token 截断
+    reranked_retriever = RerankedRetriever(
+        base_retriever=recursive_retriever,
+        reranker=reranker
+    )
+
+    # 4. 树状爬升合并：接收被 Rerank 筛选过的 Top 5 精华切片。
+    # 如果同一个章节下被命中的精华切片超过阈值，就把整个大章节丢出去
+    auto_merging_retriever = AutoMergingRetriever(
+        reranked_retriever, # 关键：入参变成了被重排过的检索器
+        storage_context,
+        verbose=False,
+        simple_ratio_thresh=0.5
+    )
+    
+    # 执行全链路检索
+    nodes = auto_merging_retriever.retrieve(query)
+    
+    # 5. 封装返回给 API
     results = []
     for node in nodes:
         node_text = node.node.get_content()

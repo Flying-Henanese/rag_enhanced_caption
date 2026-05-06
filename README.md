@@ -5,7 +5,7 @@
 
 [**English**](README.md) | [**中文**](README_zh.md)
 
-A modular multi-modal RAG (Retrieval-Augmented Generation) enhancement toolkit. This project provides decoupled modules for surgical Markdown context extraction, VLM-powered image/table captioning, and structure-aware semantic chunking.
+A modular multi-modal RAG (Retrieval-Augmented Generation) enhancement toolkit. This project provides decoupled modules for surgical Markdown context extraction, VLM-powered image/table captioning, and structure-aware semantic chunking based on a modern **Multi-Vector Architecture**.
 
 Inspired by [RAG-Anything](https://github.com/HKUDS/RAG-Anything).
 
@@ -24,45 +24,61 @@ Our toolkit serves as the critical **"last mile"** processing step—refining, e
 
 ## ✨ Core Capabilities
 
-- **VLM-Powered Enrichment (`enhancer`)**: Automatically analyzes images and tables. Analysis results are injected as collapsible `<details>` blocks **directly below** the element for optimal cognitive flow.
+- **VLM-Powered Enrichment (`enhancer`)**: Automatically analyzes images and tables. It extracts core business entities and generates high-density semantic summaries.
 - **Surgical Context Extraction**: Uses `markdown-it-py` to gather deep situational awareness (breadcrumbs, parent headers, and neighboring paragraphs) for the VLM.
 - **Structure-Aware Semantic Chunking (`chunker`)**: Unlike traditional naive character-count chunking, our engine uses AST (Abstract Syntax Tree) parsing to preserve Markdown document hierarchy and leverages Embedding models for true semantic splitting.
 
-### 🧬 The Hybrid Chunking Pipeline
+### 🧬 The Multi-Vector Pipeline
 
-Our chunking engine operates through a sophisticated multi-stage pipeline designed to maximize context retention while minimizing noise:
+Our chunking engine operates through a sophisticated multi-stage pipeline designed to maximize context retention while completely decoupling noisy markdown code from vector embeddings:
 
-1.  **Stage 1: AST Structural Parsing**: Using `markdown-it-py`, the document is decomposed into a hierarchy of tokens. This ensures that structural elements like tables, math blocks, and code fences are treated as atomic units and not arbitrarily sliced.
-2.  **Stage 2: Contextual Breadcrumbs**: For every chunk generated, the engine automatically injects the full heading path (e.g., `# Root|Parent|Subtitle`) as a prefix. This "situational awareness" ensures that even isolated chunks carry their original document context.
-3.  **Stage 3: Image-Caption Binding**: A specialized detector looks for image links followed by captions (e.g., `![alt](url)\nFigure 1: Describe`). It forces these pairs to stay in the same chunk to prevent semantic decoupling during retrieval.
-4.  **Stage 4: Hierarchical Semantic Splitting**:
-    *   **Paragraph Level**: First, it attempts to split at natural paragraph boundaries (`\n\n`).
-    *   **Line Level**: If a paragraph is too long, it attempts to split at line breaks (`\n`).
-    *   **Vector Clustering (The "Fail-Safe")**: If a single line exceeds the token limit, the engine triggers an **Embedding-based clustering algorithm**. It converts sentences into vectors and uses semantic similarity to find the most logical "cut points," ensuring that even long sentences are split at semantically meaningful locations rather than mid-word.
+1.  **Stage 1: AST Structural Parsing**: Using `markdown-it-py`, the document is decomposed into a hierarchy of tokens. Structural elements (Tables, Math Blocks, Images) are recognized and **decoupled** from regular text paragraphs.
+2.  **Stage 2: Contextual Breadcrumbs**: Every chunk automatically receives the full heading path (e.g., `["Root", "Parent", "Subtitle"]`) as metadata. 
+3.  **Stage 3: Image-Caption Binding**: A specialized detector forces image links and their subsequent captions to stay in the same chunk.
+4.  **Stage 4: Asymmetric Embedding (Multi-Vector)**:
+    *   **Child Nodes (Elements)**: Tables and images are treated as independent Child Nodes. Only their **pure VLM-generated semantic summaries** are vectorized.
+    *   **Parent Nodes (Text)**: The raw, full Markdown code (e.g., complex HTML tables or LaTeX) is kept safe in a Document Store and never fed directly to the embedding model, preventing "vector pollution".
 
-- **Parent-Child RAG Strategy**: A built-in workflow to split documents into searchable high-density "Child" chunks (AI intent summaries) and context-rich "Parent" blocks (original content).
-- **Fully Decoupled**: Use the chunker or the enhancer independently or together.
+## 🔄 Dual-Track Processing System & Output Format
 
-## 🔄 Dual-Track Processing System
+This toolkit outputs pure, perfectly structured JSONL data, ready for large-scale RAG deployments. 
 
-This toolkit outputs data in two parallel tracks, ensuring you have both human-readable previews and enterprise-grade data structures ready for large-scale RAG deployments.
+Instead of mixing everything, we utilize a **Multi-Vector Architecture** (decoupling the text used for search from the text used for LLM generation).
 
-1.  **Track 1: Markdown Slicing & Preview**
-    *   **Enriched Markdown (`_enhanced.md`)**: Generates a `.md` file with delimited chunks (`---`) and complete AI annotations. Ideal for human review, comparison, or documentation portals.
-2.  **Track 2: Enterprise Parent-Child Hierarchical Storage**
-    *   **Vector DB Payload (`_index.jsonl`)**: Lightweight semantic hooks (only AI summaries and parent pointers). Designed to be ingested into expensive, high-performance Vector Databases (like Milvus or Qdrant) without bloating the memory.
-    *   **Document Store Payload (`_docstore.jsonl`)**: The heavy, context-rich "Parent" blocks (containing original Markdown, tables, and VLM JSON payloads). Designed to be stored in cheaper, high-capacity NoSQL databases (like MongoDB or Redis). During retrieval, the Vector DB hits a lightweight child hook, which then retrieves the full parent context from this Document Store to feed the LLM.
+1.  **Track 1: Vector DB Payload (`_index.jsonl`)**
+    *   **Purpose**: To be ingested into expensive, high-performance Vector Databases (like Milvus or Qdrant).
+    *   **Format**: Contains extremely lightweight, high-density semantic text (VLM summaries or pure text paragraphs). No noisy markdown tables or raw image links.
+    ```json
+    {
+        "id": "chunk_001",
+        "text_for_embedding": "A high-density VLM summary explaining the core message of the table.",
+        "metadata": {"element_type": "Table"}
+    }
+    ```
+
+2.  **Track 2: Document Store Payload (`_docstore.jsonl`)**
+    *   **Purpose**: To be stored in cheaper, high-capacity NoSQL databases (like MongoDB or Redis). 
+    *   **Format**: Contains the heavy, context-rich blocks. During retrieval, the Vector DB hits a lightweight child hook, which then retrieves the full context from this Document Store.
+    ```json
+    {
+        "id": "chunk_001",
+        "full_content": "| Raw | Markdown | Table | ...", 
+        "parent_id": "chunk_000",
+        "header_path": ["Chapter 1", "Section 1.1"],
+        "element_type": "Table",
+        "entities": ["Metric A", "Value B"]
+    }
+    ```
 
 ### 🌊 Architecture / Workflow
 
 ```mermaid
 graph TD
-    A[Parsed Markdown] --> B(AST-Aware Semantic Chunking)
-    B -->|Context-Rich Chunks| C(VLM Multimodal Enhancement)
-    C --> D(Parent-Child Record Mapping)
-    D --> E[Enhanced Markdown Preview]
-    D --> F[(Vector DB Index)]
-    D --> G[(Document Store)]
+    A[Parsed Markdown] --> B(AST-Aware Structural Parsing)
+    B -->|Decoupled Elements| C(VLM Multimodal Enhancement)
+    C --> D(Multi-Vector Metadata Generation)
+    D --> F[(Vector DB Index - Pure Summaries)]
+    D --> G[(Document Store - Raw Markdown Code)]
 ```
 
 ## 🚀 Quick Start
@@ -77,6 +93,7 @@ cd rag_enhanced_caption
 # Install dependencies using uv
 uv sync
 uv sync --extra local # Optional: for local embedding support
+uv sync --extra demo  # Optional: to run FastAPI and advanced LlamaIndex demos
 ```
 
 ### ⚙️ Configuration
@@ -95,115 +112,34 @@ RERANK_ENDPOINT=https://api.siliconflow.cn/v1/rerank
 RERANK_MODEL_NAME=Pro/BAAI/bge-reranker-v2-m3
 ```
 
-### 1. Command Line Interface (CLI) - Recommended
+### 1. The Core 4-Stage "Rocket" Retrieval Engine
 
-Run the included CLI tool to process a document through the full pipeline (Chunking -> VLM Enrichment -> Parent-Child Split):
+Because this toolkit outputs extremely clean data, you can build enterprise-grade retrieval pipelines. We provide an excellent example in `examples/llama_index_advanced_rag.py`.
+
+It demonstrates how to build a **4-Stage Retrieval Engine** to achieve perfect precision and massive context:
+
+1.  **Vector Search (The Scout)**: Searches the `_index.jsonl` to find the most relevant pure text or VLM summaries (Top-15).
+2.  **Recursive Retrieval (The Fetcher)**: When a VLM summary is hit, it acts as a pointer. The retriever goes into the `_docstore.jsonl` to fetch the raw, full Markdown Table or Image.
+3.  **Rerank (The Sniper)**: Applies a Cross-Encoder Reranker. **Crucially, we do this BEFORE auto-merging.** Since the chunks are still small, the reranker can score them with extreme precision without triggering the fatal 512-token truncation limit. It filters the results down to the best Top-5.
+4.  **AutoMerging (The Synthesizer)**: The system checks if multiple highly-scored chunks belong to the same chapter (using the `header_path`). If so, it dynamically merges them, outputting a massive, coherent chapter to the LLM.
 
 ```bash
-# Usage: python cli.py <input_markdown_file> <output_directory>
-python cli.py ./docs/input.md ./output_folder
-```
-This will generate three files in the specified output directory:
-- `*_enhanced.md`: The enriched markdown with AI annotations.
-- `*_index.jsonl`: The lightweight index file for vector search.
-- `*_docstore.jsonl`: The full payload document store file.
-
-### 2. Multi-modal Enrichment (Standalone)
-
-```python
-import asyncio
-from rag_enhanced_caption import MarkdownMultimodalProcessor, create_default_vlm_client
-
-async def main():
-    vlm_client = create_default_vlm_client()
-    processor = MarkdownMultimodalProcessor(vlm_func=vlm_client)
-    
-    with open("doc.md", "r", encoding="utf-8") as f:
-        enriched_md = await processor.enrich_markdown(f.read(), base_dir="./")
-    print(enriched_md)
-
-if __name__ == "__main__":
-    asyncio.run(main())
+# Run the advanced retrieval demo
+uv run python examples/llama_index_advanced_rag.py
 ```
 
-### 3. Semantic Chunking (Standalone)
+### 2. Data Ingestion Pipeline (Standalone)
 
-```python
-from rag_enhanced_caption.chunker import semantic_chunk_with_metadata
-
-chunks = semantic_chunk_with_metadata(
-    markdown_content="# Header\nContent...",
-    file_id="doc_001",
-    filename="doc.md",
-    parser_config={"chunk_token_num": 512}
-)
+This script demonstrates how to read a raw Markdown document, use the semantic chunker, enrich it with the VLM, and save the decoupled output as `_docstore.jsonl` and `_index.jsonl`.
+```bash
+uv run python examples/data_ingestion_pipeline.py
 ```
 
-### 4. Ecosystem Integration (LangChain & LlamaIndex)
-
-The output JSONL files (`_docstore.jsonl` and `_index.jsonl`) are highly structured and ready to be ingested into popular RAG frameworks. Here is how you can quickly load the generated parent chunks into your pipeline.
-
-**For LlamaIndex:**
-```python
-import json
-from llama_index.core import Document
-
-documents = []
-with open("output_folder/input_docstore.jsonl", "r", encoding="utf-8") as f:
-    for line in f:
-        data = json.loads(line)
-        # Load enhanced content and metadata
-        documents.append(Document(
-            text=data.get("full_content", ""),
-            metadata=data.get("metadata", {})
-        ))
-
-# Build your vector index
-# index = VectorStoreIndex.from_documents(documents)
+### 3. API & Web Demo
+We provide a FastAPI backend to demonstrate the full pipeline interactively.
+```bash
+uv run python backend/main.py
 ```
-
-**For LangChain:**
-```python
-import json
-from langchain_core.documents import Document
-
-documents = []
-with open("output_folder/input_docstore.jsonl", "r", encoding="utf-8") as f:
-    for line in f:
-        data = json.loads(line)
-        documents.append(Document(
-            page_content=data.get("full_content", ""),
-            metadata=data.get("metadata", {})
-        ))
-
-# Insert into your vector store
-# vectorstore = Chroma.from_documents(documents, embedding_model)
-```
-
-### 5. Advanced Ecosystem Integration: Framework-Agnostic Auto-Merging
-
-**Core Architectural Principle: Extreme Decoupling**
-Please note that the core modules of this toolkit (`chunker` and `enhancer`) are completely **Framework-Agnostic**. They contain zero hardcoded dependencies on LlamaIndex or LangChain. Their sole responsibility is to produce the highest quality, pure JSONL data enriched with AST header path prefixes.
-
-Once downstream consumers receive this perfectly structured `_docstore.jsonl` file, they can **smoothly reconstruct RAG retrieval structures of any complexity**. We provide excellent examples of a high-end LlamaIndex application in the `examples/` directory:
-
-1. **`examples/data_ingestion_pipeline.py`**: This script demonstrates the full ingestion pipeline. It reads a raw Markdown document, uses the semantic chunker, enriches it with the VLM, and saves the output as `_docstore.jsonl` and `_index.jsonl`.
-   ```bash
-   uv run python examples/data_ingestion_pipeline.py
-   ```
-
-2. **`examples/llama_index_advanced_rag.py`**: In this script, we demonstrate how reading the header paths (e.g., `### Core Components|Architecture Design`) from the generated `_docstore.jsonl` allows us to dynamically reconstruct a **Global Markdown AST Tree** in memory. This tree is then seamlessly handed over to LlamaIndex's `AutoMergingRetriever`, achieving exceptionally high-precision retrieval:
-   *   **Indexing**: Only the noise-free "Child" nodes (AI intent summaries) are embedded into the Vector DB.
-   *   **Retrieval & Auto-Merging**: When a user's query hits these concise summaries, the retriever automatically climbs the AST trunk. If multiple paragraphs within the same major chapter are hit, it automatically merges them.
-   *   **Reranking (Optional)**: A reranker (like BGE-Reranker via SiliconFlow) can be configured to score the merged parent nodes, throwing away noise and ultimately feeding the complete, highly relevant "Parent" node to the large model.
-   ```bash
-   uv run python examples/llama_index_advanced_rag.py
-   ```
-
-3. **`examples/evaluate_recall.py`**: You can directly run the comparative evaluation script to intuitively experience how this mechanism of "outputting pure data for smooth downstream takeover" represents a "dimensional strike" against traditional baseline approaches.
-   ```bash
-   uv run python examples/evaluate_recall.py
-   ```
 
 ### 📊 Comparative Benchmark (The "Dimensional Strike")
 
@@ -211,10 +147,10 @@ We have performed extensive comparative tests using complex technical documents 
 
 | Test Case | Naive RAG (Baseline) | Our Toolkit (Advanced Strategy) | Outcome |
 | :--- | :--- | :--- | :--- |
-| **Complex Tables** | Often slices tables mid-row; loses column context. | AST-aware preservation + Auto-merging of the entire table. | ✅ Perfect 100% recall of structured data. |
-| **Multi-modal Intent** | Recalls raw URLs/Alt-text; LLM is "blind". | VLM-enriched annotations provide deep semantic descriptions. | ✅ LLM "understands" what the image actually proves. |
-| **Deep Hierarchy** | Recalls isolated bullet points; loses version context. | Breadcrumbs + AutoMerging climbs the AST tree for full chapters. | ✅ Complete context with zero fragmentation. |
-| **HTML-Hybrid Layout** | Gets confused by layout-heavy `<div>` or `<table>` source. | VLM-powered "Native" HTML parsing + robust AST protection. | ✅ High-density retrieval of layout-heavy technical READMEs. |
+| **Complex Tables** | Often slices tables mid-row; loses column context. | Multi-Vector Pointer + Recursive Retrieval of the entire table. | ✅ Perfect 100% recall of structured data. |
+| **Multi-modal Intent** | Recalls raw URLs/Alt-text; LLM is "blind". | VLM-enriched summaries used for vector search. | ✅ High-precision retrieval based on true illustrative intent. |
+| **Deep Hierarchy** | Recalls isolated bullet points; loses context. | Breadcrumbs + AutoMerging climbs the AST tree for full chapters. | ✅ Complete context with zero semantic fragmentation. |
+| **Large Context + Rerank** | Large merged chunks get truncated by Reranker. | Pipeline swaps order: Rerank small chunks *first*, then Merge. | ✅ Perfect scoring + Zero truncation. |
 
 ## 🛠️ Project Structure
 
@@ -222,13 +158,15 @@ We have performed extensive comparative tests using complex technical documents 
 rag_enhanced_caption/
 ├── cli.py                           # Command Line Interface (Main Entry)
 ├── examples/                        # Demonstrations & Evaluation Scripts
-│   ├── data_ingestion_pipeline.py   # End-to-end Parent-Child RAG ingestion pipeline
-│   ├── llama_index_advanced_rag.py  # Advanced RAG retrieval with LlamaIndex
-│   └── evaluate_recall.py           # Comparative evaluation tool
+│   ├── data_ingestion_pipeline.py   # Multi-Vector Data Ingestion
+│   └── llama_index_advanced_rag.py  # 4-Stage Advanced Retrieval Engine
+├── backend/
+│   ├── main.py                      # FastAPI Web Server
+│   └── rag_pipeline.py              # Advanced LlamaIndex wrapper module
 ├── src/
 │   └── rag_enhanced_caption/        # Top-level package
-│       ├── chunker/                 # Semantic Chunking (Structure-Aware)
-│       └── enhancer/                # VLM Enrichment (Visual-to-Text)
+│       ├── chunker/                 # AST-Aware Semantic Chunking
+│       └── enhancer/                # VLM Enrichment
 └── tests/                           # Unified test suite
 ```
 

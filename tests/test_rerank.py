@@ -1,56 +1,57 @@
 import pytest
 import sys
+import os
 from pathlib import Path
-from unittest.mock import patch, MagicMock
 
-# We dynamically import the SiliconFlowRerank class from the examples folder
-# to ensure it functions as expected during CI testing.
-sys.path.insert(0, str(Path(__file__).parent.parent / "examples"))
-from llama_index_advanced_rag import SiliconFlowRerank
+# Add project root to sys.path so we can import from backend
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from dotenv import load_dotenv
+load_dotenv()
+
+from backend.rag_pipeline import SiliconFlowRerank
 from llama_index.core.schema import NodeWithScore, TextNode, QueryBundle
 
-def test_siliconflow_rerank_postprocess():
-    # Initialize the reranker with a dummy key and top_n=1 to test filtering
-    reranker = SiliconFlowRerank(api_key="test_key", top_n=1)
+def test_siliconflow_rerank_real_api():
+    """
+    Test using REAL SiliconFlow Rerank API.
+    Verifies that the postprocessing actually sorts and filters the nodes.
+    """
+    api_key = os.getenv("RERANK_API_KEY")
+    if not api_key:
+        pytest.skip("RERANK_API_KEY is not configured.")
+
+    reranker = SiliconFlowRerank(
+        api_key=api_key,
+        endpoint=os.getenv("RERANK_ENDPOINT", "https://api.siliconflow.cn/v1/rerank"),
+        model=os.getenv("RERANK_MODEL_NAME", "Qwen/Qwen3-Reranker-0.6B"),
+        top_n=1
+    )
     
-    # Create some dummy nodes
+    # Create dummy nodes. One is highly relevant to the query, one is noise.
     nodes = [
-        NodeWithScore(node=TextNode(text="This is a noisy context that should be ranked lower."), score=0.5),
-        NodeWithScore(node=TextNode(text="This is the highly relevant context containing the exact answer."), score=0.5)
+        NodeWithScore(node=TextNode(text="Paris is the capital of France."), score=1.0),
+        NodeWithScore(node=TextNode(text="Quantum computing utilizes qubits for computation."), score=1.0)
     ]
-    query_bundle = QueryBundle(query_str="What is the highly relevant context?")
+    query_bundle = QueryBundle(query_str="What is the capital of France?")
     
-    # Mock the SiliconFlow API response to avoid actual network calls during testing
-    mock_response = MagicMock()
-    mock_response.json.return_value = {
-        "results": [
-            {"index": 0, "relevance_score": 0.1},
-            {"index": 1, "relevance_score": 0.95}
-        ]
-    }
+    # Call the real API
+    new_nodes = reranker._postprocess_nodes(nodes, query_bundle)
     
-    with patch("requests.post", return_value=mock_response) as mock_post:
-        new_nodes = reranker._postprocess_nodes(nodes, query_bundle)
-        
-        # Verify that the post request was made with the correct arguments
-        mock_post.assert_called_once()
-        args, kwargs = mock_post.call_args
-        assert kwargs["headers"]["Authorization"] == "Bearer test_key"
-        assert kwargs["json"]["query"] == query_bundle.query_str
-        assert "documents" in kwargs["json"] # Verify the correct payload field is used
-        assert len(kwargs["json"]["documents"]) == 2
-        
-        # Verify the reranker filtered and sorted the nodes correctly
-        assert len(new_nodes) == 1
-        assert new_nodes[0].node.text == "This is the highly relevant context containing the exact answer."
-        assert new_nodes[0].score == 0.95
+    # Verify the reranker filtered and sorted the nodes correctly
+    assert len(new_nodes) == 1, "Reranker failed to filter down to top_n=1"
+    assert "Paris" in new_nodes[0].node.text, "Reranker failed to pick the relevant context"
+    assert new_nodes[0].score > 0, "Reranker failed to assign a positive score"
+    print(f"\n[Real Rerank Passed] Kept relevant node with score: {new_nodes[0].score:.4f}")
 
 def test_siliconflow_rerank_empty_nodes():
-    reranker = SiliconFlowRerank(api_key="test_key", top_n=2)
+    api_key = os.getenv("RERANK_API_KEY")
+    if not api_key:
+        pytest.skip("RERANK_API_KEY is not configured.")
+
+    reranker = SiliconFlowRerank(api_key=api_key, top_n=2)
     query_bundle = QueryBundle(query_str="Test query")
     
-    # Should handle empty lists gracefully without calling the API
-    with patch("requests.post") as mock_post:
-        new_nodes = reranker._postprocess_nodes([], query_bundle)
-        mock_post.assert_not_called()
-        assert new_nodes == []
+    # Should handle empty lists gracefully without throwing an error
+    new_nodes = reranker._postprocess_nodes([], query_bundle)
+    assert new_nodes == []

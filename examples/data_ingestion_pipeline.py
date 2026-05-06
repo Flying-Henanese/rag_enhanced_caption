@@ -1,13 +1,8 @@
 import asyncio
-import hashlib
 import json
-import os
-import re
 import sys
 import time
 from pathlib import Path
-from typing import List, Dict, Any, Tuple
-
 from dotenv import load_dotenv
 from loguru import logger
 
@@ -21,103 +16,18 @@ if env_path.exists():
 else:
     logger.warning(f"No .env file found at {env_path}, relying on system environment variables.")
 
-sys.path.insert(0, str(root_dir / "src"))
+sys.path.insert(0, str(root_dir))
 
 from rag_enhanced_caption.enhancer.processor import MarkdownMultimodalProcessor
 from rag_enhanced_caption.enhancer.vlm_client import create_default_vlm_client
-from rag_enhanced_caption.chunker.dispatcher import chunk_markdown as semantic_chunk_with_metadata
-
-# --- 正则匹配模式 ---
-_IMAGE_ANALYSIS_RE = re.compile(r"<image_analysis>(.*?)</image_analysis>", re.DOTALL)
-_ENTITY_RE = re.compile(r"-\s+\*\*关键实体\*\*:\s*(.*)")
-_SUMMARY_RE = re.compile(r"-\s+\*\*简短摘要\*\*:\s*(.*)")
-_CORE_RE = re.compile(r"-\s+\*\*核心总结\*\*:\s*(.*)")
-_HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
-
-def _extract_metadata_from_analysis(analysis_body: str) -> Dict[str, Any]:
-    """从 AI 分析块中提取结构化元数据"""
-    entities = []
-    ent_match = _ENTITY_RE.search(analysis_body)
-    if ent_match:
-        entities = [e.strip() for e in ent_match.group(1).split(",") if e.strip()]
-        
-    sum_match = _SUMMARY_RE.search(analysis_body)
-    summary = sum_match.group(1).strip() if sum_match else ""
-    
-    core_match = _CORE_RE.search(analysis_body)
-    ai_core_summary = core_match.group(1).strip() if core_match else ""
-    
-    return {
-        "entities": entities,
-        "summary": summary,
-        "ai_core_summary": ai_core_summary
-    }
-
-def _build_hierarchical_records(chunk_record: Dict[str, Any], source_file: Path) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
-    """
-    将一个语义块拆分为一个父块(Parent)和多个多模态子块(Children)。
-    """
-    content = chunk_record.get("content", "")
-    base_id = chunk_record.get("id", hashlib.md5(content.encode()).hexdigest()[:12])
-    
-    # 1. 提取所有 AI 分析块
-    analysis_blocks = _IMAGE_ANALYSIS_RE.findall(content)
-    # 2. 提取所有图片 URL (用于关联)
-    image_urls = re.findall(r"!\[.*?\]\((.*?)\)", content)
-    
-    # 生成 Parent 记录
-    content_clean = _IMAGE_ANALYSIS_RE.sub("", content)
-    content_clean = re.sub(r"<details>.*?</details>", "", content_clean, flags=re.DOTALL).strip()
-    
-    parent_id = f"p_{base_id}"
-    common_metadata = {
-        "source": source_file.name,
-        "file_id": chunk_record.get("file_id"),
-        "filename": chunk_record.get("filename"),
-    }
-    
-    parent_record = {
-        "id": parent_id,
-        "type": "parent",
-        "parent_id": None,
-        "text_for_embedding": content_clean,  # 仅基于原文文本
-        "full_content": content,              # 包含完整 AI 注释的原文
-        "metadata": {**common_metadata, "chunk_type": "text"}
-    }
-    
-    # 生成 Children 记录
-    child_records = []
-    for i, analysis_body in enumerate(analysis_blocks):
-        child_id = f"c_{base_id}_{i}"
-        meta = _extract_metadata_from_analysis(analysis_body)
-        
-        # 关联图片 URL (如果能对上的话)
-        url = image_urls[i] if i < len(image_urls) else "unknown"
-        
-        child_records.append({
-            "id": child_id,
-            "parent_id": parent_id,           # 核心关联：指向父块
-            "type": "child",
-            "text_for_embedding": meta["summary"], # 仅基于 AI 摘要，避免噪声
-            "full_content": f"![image]({url})\n\n{analysis_body}", 
-            "metadata": {
-                **common_metadata,
-                "chunk_type": "multimodal",
-                "image_url": url,
-                "entities": meta["entities"],
-                "ai_summary": meta["summary"],
-                "ai_core_summary": meta["ai_core_summary"]
-            }
-        })
-        
-    return parent_record, child_records
+from rag_enhanced_caption.chunker.dispatcher import chunk_markdown
 
 async def process_document(file_path: str):
     """
-    Parent-Child 模式文档处理流水线：
-    1. 语义分块。
-    2. VLM 增强描述。
-    3. 拆分父子记录，输出 Index 和 DocStore 两层数据。
+    Parent-Child 模式文档处理流水线（结构化新版）：
+    1. 语义分块（输出干净的元数据，不使用丑陋的正则）。
+    2. VLM 增强描述（多模态隔离存储）。
+    3. 模拟落地存储格式。
     """
     start_time = time.time()
     file_path = Path(file_path)
@@ -130,8 +40,9 @@ async def process_document(file_path: str):
         md_content = f.read()
 
     # --- 阶段 1: 语义分块 ---
-    logger.info("Phase 1: Semantic Chunking")
-    chunks = semantic_chunk_with_metadata(
+    logger.info("Phase 1: Semantic Chunking (Structured)")
+    # 返回的是结构化的 dict，内部包含 header_path, element_type 等
+    chunks = chunk_markdown(
         markdown_content=md_content,
         file_id=file_path.stem,
         filename=file_path.name,
@@ -139,62 +50,45 @@ async def process_document(file_path: str):
     )
 
     # --- 阶段 2: 多模态增强 ---
-    logger.info("Phase 2: VLM Enhancement")
+    logger.info("Phase 2: VLM Enhancement (Multi-Vector Processing)")
     vlm_client = create_default_vlm_client()
     processor = MarkdownMultimodalProcessor(vlm_func=vlm_client, max_concurrency=2)
     base_dir = file_path.parent.absolute()
     
-    # --- 阶段 3: 构建层级记录并保存 ---
-    logger.info("Phase 3: Building Parent-Child Hierarchy & Persistence")
+    # 批量增强，VLM 只对 Table/Image 生成摘要，写入 text_for_embedding
+    enriched_chunks = await processor.enrich_chunks(chunks, base_dir=str(base_dir))
+    
+    # --- 阶段 3: 构建持久化数据展示 ---
+    logger.info("Phase 3: Persistence Demonstration")
     
     output_dir = root_dir / "output"
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    index_path = output_dir / f"{file_path.stem}_index.jsonl"
-    docstore_path = output_dir / f"{file_path.stem}_docstore.jsonl"
-    enhanced_md_path = output_dir / f"{file_path.stem}_enhanced.md"
+    index_path = output_dir / f"{file_path.stem}_index_new.jsonl"
+    docstore_path = output_dir / f"{file_path.stem}_docstore_new.jsonl"
 
     with open(index_path, "w", encoding="utf-8") as f_idx, \
-         open(docstore_path, "w", encoding="utf-8") as f_doc, \
-         open(enhanced_md_path, "w", encoding="utf-8") as f_md:
+         open(docstore_path, "w", encoding="utf-8") as f_doc:
         
-        for idx, chunk in enumerate(chunks):
-            logger.info(f"Processing chunk {idx + 1}/{len(chunks)}...")
-            
-            # 运行 VLM 增强
-            enriched_text = await processor.enrich_markdown(
-                md_content=chunk["content"], 
-                base_dir=str(base_dir)
-            )
-            chunk["content"] = enriched_text
-            
-            # 拆分父子记录
-            parent, children = _build_hierarchical_records(chunk, file_path)
-            
-            # 写入增强后的完整 Markdown (预览用)
-            f_md.write(enriched_text + "\n\n---\n\n")
-            
-            # 处理 Parent
+        for chunk in enriched_chunks:
+            # Index 仅仅存储专供向量搜索的高浓度纯文本或 VLM 摘要
             f_idx.write(json.dumps({
-                "id": parent["id"],
-                "text_for_embedding": parent["text_for_embedding"],
-                "metadata": {"type": "parent", "source": parent["metadata"]["source"]}
+                "id": chunk["id"],
+                "text_for_embedding": chunk["text_for_embedding"],
+                "metadata": {"element_type": chunk["metadata"]["element_type"]}
             }, ensure_ascii=False) + "\n")
             
-            f_doc.write(json.dumps(parent, ensure_ascii=False) + "\n")
-            
-            # 处理 Children
-            for child in children:
-                f_idx.write(json.dumps({
-                    "id": child["id"],
-                    "parent_id": child["parent_id"],
-                    "text_for_embedding": child["text_for_embedding"],
-                    "metadata": {"type": "child", "source": child["metadata"]["source"]}
-                }, ensure_ascii=False) + "\n")
-                
-                f_doc.write(json.dumps(child, ensure_ascii=False) + "\n")
+            # Docstore 存储原汁原味的、带前后文的复杂 Markdown 代码
+            f_doc.write(json.dumps({
+                "id": chunk["id"],
+                "full_content": chunk.get("full_content", chunk["content"]),
+                "parent_id": chunk["metadata"].get("parent_id"),
+                "header_path": chunk["metadata"].get("header_path", []),
+                "element_type": chunk["metadata"].get("element_type", "text"),
+                "entities": chunk["metadata"].get("entities", [])
+            }, ensure_ascii=False) + "\n")
 
-    logger.info(f"Workflow complete! Files saved to {file_path.parent}")
+    logger.info(f"Workflow complete! Files saved to {output_dir}")
     logger.info(f"Total time: {time.time() - start_time:.2f}s")
 
 if __name__ == "__main__":
