@@ -158,15 +158,24 @@ def html_table_to_key_value(html: str) -> list[str]:
     headers = [h if h is not None else "" for h in headers]
 
     kv_lines = []
-    # 从第二行开始映射 KV
-    for row_values in grid[1:]:
+    
+    # 如果表格只有一行，把它自己当成数据行处理
+    if len(grid) == 1:
+        data_rows = grid
+    else:
+        data_rows = grid[1:]
+
+    # 从数据行开始映射 KV
+    for row_values in data_rows:
         min_len = min(len(headers), len(row_values))
         row_parts = []
         for i in range(min_len):
             key = headers[i]
             val = row_values[i] if row_values[i] is not None else ""
-            if key:
+            if key and key != val: # 当只有一行时，key 和 val 是一样的，避免重复 "A：A"
                 row_parts.append(f"{key}：{val}")
+            elif val:
+                row_parts.append(val)
         if row_parts:
             # 单行数据使用分号拼接成一整句
             kv_lines.append("；".join(row_parts) + "；")

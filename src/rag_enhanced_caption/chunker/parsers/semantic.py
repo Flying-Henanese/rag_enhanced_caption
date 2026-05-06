@@ -280,6 +280,26 @@ def chunk_markdown(
         elif token.type == "html_block":
             _flush_content(result, current_content, title_stack, max_length, embed_fn, state=state)
             content = token.content.strip()
+            
+            # 解决 markdown-it 将带空行的 HTML 表格切碎的问题
+            if "<table" in content.lower() and "</table>" not in content.lower():
+                table_start = token.map[0] if token.map else -1
+                if table_start != -1:
+                    table_end = table_start + 1
+                    for line_idx in range(table_start, len(original_lines)):
+                        if "</table>" in original_lines[line_idx].lower():
+                            table_end = line_idx + 1
+                            break
+                    content = "\n".join(original_lines[table_start:table_end])
+                    j = i + 1
+                    while j < len(tokens):
+                        next_token = tokens[j]
+                        if next_token.map:
+                            if next_token.map[0] >= table_end:
+                                break
+                        j += 1
+                    i = j - 1
+
             is_converted_table = False
             if "<table" in content.lower():
                 try:
