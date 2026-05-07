@@ -101,5 +101,5 @@ async def process_document(file_path: str):
     logger.info(f"Total time: {time.time() - start_time:.2f}s")
 
 if __name__ == "__main__":
-    TARGET_MD_FILE = "test_resource/rag-anything.md"
+    TARGET_MD_FILE = "test_resource/paddleocr.md"
     asyncio.run(process_document(TARGET_MD_FILE))
