@@ -103,12 +103,21 @@ class MarkdownMultimodalProcessor:
             return
             
         image_url = url_match.group(1)
+
+        # 1. 优先从 URL 后缀进行初步判断，避免不必要的网络下载。
+        # TODO: 目前暂不支持 SVG 格式图片的 VLM 分析（需后续攻克：转码为 PNG 或解析 XML 文本）。
+        if image_url.lower().split('?')[0].endswith(".svg"):
+            logger.warning(f"Skipping SVG image (detected via URL): {image_url}")
+            chunk["text_for_embedding"] = f"Image (SVG format): {image_url}"
+            return
+
         img_bytes = await image_resolver(image_url)
         if not img_bytes:
             chunk["text_for_embedding"] = f"Image placeholder: {image_url}"
             return
             
-        # 检查是否为 SVG。大多数 VLM 不支持 SVG，直接发送会导致 400 错误。
+        # 2. 兜底检查 MIME 类型。大多数 VLM 不支持 SVG，直接发送会导致 400 错误。
+        # TODO: 目前暂不支持 SVG 格式图片的 VLM 分析（需后续攻克：转码为 PNG 或解析 XML 文本）。
         mime_type = get_mime_type(img_bytes)
         if mime_type == "image/svg+xml":
             logger.warning(f"Skipping VLM analysis for SVG image: {image_url}. Using fallback text.")
