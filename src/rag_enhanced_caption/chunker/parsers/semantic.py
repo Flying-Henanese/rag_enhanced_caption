@@ -195,6 +195,10 @@ def chunk_markdown(
         
         if token.type == "heading_open":
             _flush_content(result, current_content, title_stack, max_length, embed_fn, state=state)
+            
+            # 断开跨章节的父子关联：遇到新标题时，重置上一个文本锚点
+            state["last_text_idx"] = -1
+            
             level = int(token.tag[1:]) if token.tag and len(token.tag) > 1 else 1
             inline_token = tokens[i + 1]
             if inline_token.type == "inline":

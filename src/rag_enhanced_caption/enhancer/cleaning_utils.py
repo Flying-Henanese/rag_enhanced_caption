@@ -1,5 +1,5 @@
 import re
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup, Tag, Comment
 from loguru import logger
 from typing import List, Dict, Any
 
@@ -9,6 +9,8 @@ def clean_html_for_llm(html_content: str) -> str:
     
     保留语义相关的标签（如 table, tr, td）及其关键属性（如 colspan, rowspan），
     剔除装饰性标签（如 div, span, center）和所有样式属性（如 style, class, id）。
+    将 h1-h6 转换为 Markdown 标题格式。
+    移除 HTML 注释。
     
     Args:
         html_content: 包含 HTML 标签的原始字符串。
@@ -22,6 +24,11 @@ def clean_html_for_llm(html_content: str) -> str:
     try:
         # 使用 html.parser 以减少依赖
         soup = BeautifulSoup(html_content, "html.parser")
+
+        # 0. 移除所有 HTML 注释
+        comments = soup.findAll(string=lambda text: isinstance(text, Comment))
+        for comment in comments:
+            comment.extract()
 
         # 1. 定义需要完整保留结构的语义标签及其核心属性
         SEMANTIC_TAGS = {
@@ -38,8 +45,7 @@ def clean_html_for_llm(html_content: str) -> str:
             "i": [],
             "em": [],
             "code": [],
-            "pre": [],
-            "h1": [], "h2": [], "h3": [], "h4": [], "h5": [], "h6": []
+            "pre": []
         }
 
         # 2. 定义需要剔除标签但保留其内部文字的装饰标签
@@ -55,6 +61,12 @@ def clean_html_for_llm(html_content: str) -> str:
                     if attr.lower() in allowed_attrs:
                         new_attrs[attr] = value
                 tag.attrs = new_attrs
+            elif re.match(r'^h[1-6]$', tag.name):
+                # 将 h1-h6 转换为 Markdown 标题
+                level = int(tag.name[1])
+                prefix = "#" * level + " "
+                tag.insert_before(prefix)
+                tag.unwrap()
             elif tag.name in DECORATIVE_TAGS:
                 # 剔除装饰标签，保留内容
                 tag.unwrap()
@@ -86,11 +98,15 @@ def clean_html_for_llm(html_content: str) -> str:
 
 def clean_markdown_styles(md_content: str) -> str:
     """
-    清理 Markdown 中的 HTML 样式块。
-    例如移除 <style> 块或包含大量样式的 <div>。
+    清理 Markdown 中的 HTML 样式块和冗余的编码数据。
+    例如移除 <style> 块、替换 Base64 图片编码为占位符等。
     """
     # 移除 <style>...</style> 块
     md_content = re.sub(r'<style.*?>.*?</style>', '', md_content, flags=re.DOTALL)
+    
+    # 替换 Base64 数据为占位符，防止撑爆 Token 限制
+    # 匹配 data:image/xxx;base64, 后面的长字符串
+    md_content = re.sub(r'data:image/[a-zA-Z0-9+-\.]+;base64,[A-Za-z0-9+/=]+', '[BASE64_IMAGE_OMITTED]', md_content)
     
     # 使用 clean_html_for_llm 处理剩余内容
     return clean_html_for_llm(md_content)
@@ -102,13 +118,17 @@ def compress_and_relink_chunks(chunks: List[Dict[str, Any]]) -> List[Dict[str, A
     工作流：
     1. 对每个 chunk 进行脱水清洗。
     2. 找出清洗后为空的废弃块。
-    3. 为每个废弃块寻找它最近的有效祖先节点（跳跃继承）。
-    4. 重建列表，移除废弃块，并更新幸存块的 parent_id。
+    3. 识别纯图片块，纠正其 element_type。
+    4. 为每个废弃块寻找它最近的有效祖先节点（跳跃继承）。
+    5. 重建列表，移除废弃块，并更新幸存块的 parent_id。
     """
     
     # 阶段 1 & 2: 清洗并识别待删除块
     cleaned_chunks_map = {}
     to_delete_ids = set()
+    
+    # 用于匹配纯图片的正则 (支持多张图片连在一起)
+    image_pattern = re.compile(r'^(!\[.*?\]\(.*?\)\s*)+$')
     
     for chunk in chunks:
         raw_content = chunk.get("full_content", chunk["content"])
@@ -129,6 +149,15 @@ def compress_and_relink_chunks(chunks: List[Dict[str, Any]]) -> List[Dict[str, A
         if not cleaned.strip():
             # 这里我们要极度小心：只有真的是空的，而且不是为了某些特殊逻辑故意留的哨兵，才删除
             to_delete_ids.add(chunk_id)
+        else:
+            # 阶段 3: 类型纠正
+            # 如果清洗后发现它其实就是一张或多张图片，修正类型为 Image
+            # 这样原本被 div 包裹的图片就能被 VLM 正常处理了
+            if chunk.get("metadata", {}).get("element_type") == "html_block" or chunk.get("element_type") == "html_block":
+                if image_pattern.match(cleaned.strip()):
+                    if "metadata" in chunk:
+                        chunk["metadata"]["element_type"] = "Image"
+                    chunk["element_type"] = "Image"
 
     if not to_delete_ids:
         # 如果没有任何块被过滤，直接返回清洗后的块，清理临时字段
@@ -148,7 +177,7 @@ def compress_and_relink_chunks(chunks: List[Dict[str, Any]]) -> List[Dict[str, A
             return raw_parent_id
         return f"{base_file_id}_chunk_{raw_parent_id}"
 
-    # 阶段 3: 追踪有效祖先 (路径压缩)
+    # 阶段 4: 追踪有效祖先 (路径压缩)
     # parent_map 记录真正的最终指向
     resolved_parent_map = {}
     
@@ -177,7 +206,7 @@ def compress_and_relink_chunks(chunks: List[Dict[str, Any]]) -> List[Dict[str, A
                 
         resolved_parent_map[chunk_id] = curr_parent
 
-    # 阶段 4: 重建有效列表
+    # 阶段 5: 重建有效列表
     final_chunks = []
     for chunk in chunks:
         chunk_id = chunk["id"]
