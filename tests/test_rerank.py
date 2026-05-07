@@ -1,3 +1,10 @@
+"""
+测试模块：验证精排模型 (Reranker) 接口集成
+主要逻辑：
+1. API 调用：验证与 SiliconFlow Rerank API 的连通性。
+2. 排序有效性：通过对比试验（一个相关节点，一个噪音节点），验证 Reranker 是否能将相关节点排在首位。
+3. 容错处理：验证在节点列表为空或 API 异常时，系统能否平稳降级。
+"""
 import pytest
 import sys
 import os

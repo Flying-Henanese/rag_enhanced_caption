@@ -1,3 +1,10 @@
+"""
+测试模块：验证主流 RAG 生态系统（LlamaIndex & LangChain）的集成兼容性
+主要逻辑：
+1. 格式验证：确保生成的 _docstore.jsonl 格式能被标准 JSON 解析。
+2. 对象转换：验证数据能否无缝转换为 LlamaIndex 的 Document 对象和 LangChain 的 Document 对象。
+3. 元数据保留：检查转换过程中 metadata 字段是否完整留存。
+"""
 import json
 import os
 from llama_index.core import Document as LlamaDocument

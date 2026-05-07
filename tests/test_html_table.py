@@ -1,3 +1,10 @@
+"""
+测试模块：验证 HTML 表格的解析与多模态增强逻辑
+主要逻辑：
+1. 识别：验证语义分块器能否正确识别 Markdown 中的 HTML <table> 块。
+2. 增强：调用 VLM 对 HTML 表格生成高浓度的语义摘要和实体列表。
+3. 校验：确保 VLM 输出的 JSON 格式正确解析，且不泄露原始 JSON 语法到 text_for_embedding 字段。
+"""
 import pytest
 import asyncio
 import os

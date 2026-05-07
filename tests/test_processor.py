@@ -1,3 +1,10 @@
+"""
+测试模块：验证多模态处理器 (Processor) 的核心流程
+主要逻辑：
+1. 异步处理：验证异步 VLM 调用和信号量并发控制。
+2. 语义增强：针对 Markdown 表格生成用于向量检索的摘要 (text_for_embedding)。
+3. 上下文注入：验证 VLM 是否能利用表格上方的文字背景生成更精准的描述。
+"""
 import asyncio
 import os
 import sys
