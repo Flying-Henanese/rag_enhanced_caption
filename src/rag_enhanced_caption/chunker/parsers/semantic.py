@@ -21,8 +21,7 @@ from ..schema import SemanticChunk
 logger = logging.getLogger(__name__)
 
 _CONTROL_SPECIAL_ELEMENTS = {
-    "bullet_list_open",
-    "ordered_list_open",
+    "none",
 }
 
 def _normalize_special_element(special_element: str | None) -> str:

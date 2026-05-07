@@ -26,7 +26,7 @@ def clean_html_for_llm(html_content: str) -> str:
         soup = BeautifulSoup(html_content, "html.parser")
 
         # 0. 移除所有 HTML 注释
-        comments = soup.findAll(string=lambda text: isinstance(text, Comment))
+        comments = soup.find_all(string=lambda text: isinstance(text, Comment))
         for comment in comments:
             comment.extract()
 
