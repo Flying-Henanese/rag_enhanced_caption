@@ -8,6 +8,7 @@ import re
 # 内部引用
 from .json_utils import robust_json_parse
 from .image_utils import create_image_resolver
+from .vlm_client import get_mime_type
 from . import prompts
 
 class MarkdownMultimodalProcessor:
@@ -105,6 +106,13 @@ class MarkdownMultimodalProcessor:
         img_bytes = await image_resolver(image_url)
         if not img_bytes:
             chunk["text_for_embedding"] = f"Image placeholder: {image_url}"
+            return
+            
+        # 检查是否为 SVG。大多数 VLM 不支持 SVG，直接发送会导致 400 错误。
+        mime_type = get_mime_type(img_bytes)
+        if mime_type == "image/svg+xml":
+            logger.warning(f"Skipping VLM analysis for SVG image: {image_url}. Using fallback text.")
+            chunk["text_for_embedding"] = f"Image (SVG format): {image_url}"
             return
 
         if context:

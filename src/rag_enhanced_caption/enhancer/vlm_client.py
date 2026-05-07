@@ -69,8 +69,10 @@ async def default_vlm_call(
             "type": "image_url",
             "image_url": {"url": f"data:{mime_type};base64,{image_base64}"}
         })
-    
-    messages.append({"role": "user", "content": user_content})
+        messages.append({"role": "user", "content": user_content})
+    else:
+        # 如果没有图片，部分 OpenAI 兼容服务器更偏好 content 为字符串而不是列表
+        messages.append({"role": "user", "content": user_prompt})
     
     payload = {
         "model": model_name,
@@ -81,11 +83,19 @@ async def default_vlm_call(
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(endpoint, headers=headers, json=payload)
-            response.raise_for_status()
+            if response.status_code != 200:
+                error_detail = response.text
+                logger.error(f"VLM Server Error {response.status_code}: {error_detail}")
+                raise httpx.HTTPStatusError(
+                    f"Client error '{response.status_code} {response.reason_phrase}' for url '{response.url}'\nResponse: {error_detail}",
+                    request=response.request,
+                    response=response
+                )
+            
             result = response.json()
             return result["choices"][0]["message"]["content"]
     except httpx.HTTPStatusError as e:
-        logger.error(f"HTTP Error {e.response.status_code}: {e.response.text}")
+        # 已经在上面处理并抛出了带详细信息的异常
         raise
     except Exception as e:
         logger.exception(f"VLM Call failed with exception: {str(e)}")
