@@ -21,14 +21,15 @@ sys.path.insert(0, str(root_dir))
 from rag_enhanced_caption.enhancer.processor import MarkdownMultimodalProcessor
 from rag_enhanced_caption.enhancer.vlm_client import create_default_vlm_client
 from rag_enhanced_caption.chunker.dispatcher import chunk_markdown
-from rag_enhanced_caption.enhancer.cleaning_utils import clean_markdown_styles
+from rag_enhanced_caption.enhancer.cleaning_utils import compress_and_relink_chunks
 
 async def process_document(file_path: str):
     """
     Parent-Child 模式文档处理流水线（结构化新版）：
     1. 语义分块（输出干净的元数据，不使用丑陋的正则）。
-    2. VLM 增强描述（多模态隔离存储）。
-    3. 模拟落地存储格式（应用语义清洗）。
+    2. 清洗与过滤（提早剔除空块，重塑上下文关联）。
+    3. VLM 增强描述（多模态隔离存储）。
+    4. 模拟落地存储格式。
     """
     start_time = time.time()
     file_path = Path(file_path)
@@ -43,24 +44,30 @@ async def process_document(file_path: str):
     # --- 阶段 1: 语义分块 ---
     logger.info("Phase 1: Semantic Chunking (Structured)")
     # 返回的是结构化的 dict，内部包含 header_path, element_type 等
-    chunks = chunk_markdown(
+    raw_chunks = chunk_markdown(
         markdown_content=md_content,
         file_id=file_path.stem,
         filename=file_path.name,
         parser_config={"chunk_token_num": 512}
     )
 
-    # --- 阶段 2: 多模态增强 ---
-    logger.info("Phase 2: VLM Enhancement (Multi-Vector Processing)")
+    # --- 阶段 2: 语义清洗与压缩 ---
+    logger.info("Phase 2: Semantic Cleaning and Relinking")
+    # 提前清洗，过滤空块，并修复断裂的 parent_id 关联
+    chunks = compress_and_relink_chunks(raw_chunks)
+
+    # --- 阶段 3: 多模态增强 ---
+    logger.info("Phase 3: VLM Enhancement (Multi-Vector Processing)")
     vlm_client = create_default_vlm_client()
     processor = MarkdownMultimodalProcessor(vlm_func=vlm_client, max_concurrency=2)
     base_dir = file_path.parent.absolute()
     
     # 批量增强，VLM 只对 Table/Image 生成摘要，写入 text_for_embedding
+    # 此时发给 VLM 的已经是脱水后的纯净 Markdown
     enriched_chunks = await processor.enrich_chunks(chunks, base_dir=str(base_dir))
     
-    # --- 阶段 3: 构建持久化数据展示 ---
-    logger.info("Phase 3: Persistence Demonstration")
+    # --- 阶段 4: 构建持久化数据展示 ---
+    logger.info("Phase 4: Persistence Demonstration")
     
     output_dir = root_dir / "output"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -73,20 +80,17 @@ async def process_document(file_path: str):
         
         for chunk in enriched_chunks:
             # Index 仅仅存储专供向量搜索的高浓度纯文本或 VLM 摘要
+            # 因为已经提前清洗过，这里的 text_for_embedding 不会再受 HTML 干扰
             f_idx.write(json.dumps({
                 "id": chunk["id"],
                 "text_for_embedding": chunk["text_for_embedding"],
                 "metadata": {"element_type": chunk["metadata"]["element_type"]}
             }, ensure_ascii=False) + "\n")
             
-            # Docstore 存储原汁原味的、带前后文的复杂 Markdown 代码
-            # 应用语义清洗，剔除装饰性 HTML，保留核心结构
-            raw_content = chunk.get("full_content", chunk["content"])
-            cleaned_content = clean_markdown_styles(raw_content)
-
+            # Docstore 存储原汁原味的、带前后文的复杂 Markdown 代码 (已经过了脱水)
             f_doc.write(json.dumps({
                 "id": chunk["id"],
-                "full_content": cleaned_content,
+                "full_content": chunk.get("full_content", chunk["content"]),
                 "parent_id": chunk["metadata"].get("parent_id"),
                 "header_path": chunk["metadata"].get("header_path", []),
                 "element_type": chunk["metadata"].get("element_type", "text"),

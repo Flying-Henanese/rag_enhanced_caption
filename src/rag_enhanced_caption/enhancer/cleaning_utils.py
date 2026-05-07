@@ -1,6 +1,7 @@
 import re
 from bs4 import BeautifulSoup, Tag
 from loguru import logger
+from typing import List, Dict, Any
 
 def clean_html_for_llm(html_content: str) -> str:
     """
@@ -93,3 +94,113 @@ def clean_markdown_styles(md_content: str) -> str:
     
     # 使用 clean_html_for_llm 处理剩余内容
     return clean_html_for_llm(md_content)
+
+def compress_and_relink_chunks(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    清理无意义的空块，并安全地重塑断开的 parent_id 关联。
+    
+    工作流：
+    1. 对每个 chunk 进行脱水清洗。
+    2. 找出清洗后为空的废弃块。
+    3. 为每个废弃块寻找它最近的有效祖先节点（跳跃继承）。
+    4. 重建列表，移除废弃块，并更新幸存块的 parent_id。
+    """
+    
+    # 阶段 1 & 2: 清洗并识别待删除块
+    cleaned_chunks_map = {}
+    to_delete_ids = set()
+    
+    for chunk in chunks:
+        raw_content = chunk.get("full_content", chunk["content"])
+        cleaned = clean_markdown_styles(raw_content)
+        
+        # 将清洗后的内容暂存在 chunk 中，避免后续重复清洗
+        chunk["_cleaned_content"] = cleaned 
+        
+        chunk_id = chunk["id"]
+        # 我们用 chunk["metadata"]["parent_id"] 或者 chunk["parent_id"] 取决于你的数据结构
+        # semantic.py 里生成的结构，全局和 metadata 里都有 parent_id，这里我们以全局为准但兼顾 metadata
+        # 注意 semantic.py 里返回的 parent_id 是整数型的 string，如 "5"，而最终生成的块 id 可能是 "filename_chunk_5"
+        # dispatcher.py 在构建 records 时：
+        # "id": f"{file_id}_chunk_{idx}", "parent_id": chunk.parent_id
+        
+        cleaned_chunks_map[chunk_id] = chunk
+        
+        if not cleaned.strip():
+            # 这里我们要极度小心：只有真的是空的，而且不是为了某些特殊逻辑故意留的哨兵，才删除
+            to_delete_ids.add(chunk_id)
+
+    if not to_delete_ids:
+        # 如果没有任何块被过滤，直接返回清洗后的块，清理临时字段
+        for c in chunks:
+            c["full_content"] = c.pop("_cleaned_content")
+            c["content"] = c["full_content"]
+        return chunks
+
+    logger.info(f"Filtering out {len(to_delete_ids)} empty chunks after cleaning.")
+
+    # 辅助函数：根据 parent_id 字符串 (e.g. "5") 解析出完整的真实 ID (e.g. "file_chunk_5")
+    def _resolve_full_id(base_file_id: str, raw_parent_id: str) -> str:
+        if not raw_parent_id:
+            return None
+        # 如果已经是完整 ID 就直接返回
+        if "_chunk_" in str(raw_parent_id):
+            return raw_parent_id
+        return f"{base_file_id}_chunk_{raw_parent_id}"
+
+    # 阶段 3: 追踪有效祖先 (路径压缩)
+    # parent_map 记录真正的最终指向
+    resolved_parent_map = {}
+    
+    file_id = chunks[0]["file_id"] if chunks else ""
+    
+    for chunk in chunks:
+        chunk_id = chunk["id"]
+        raw_parent = chunk.get("parent_id")
+        
+        full_parent_id = _resolve_full_id(file_id, raw_parent)
+        
+        # 沿着 parent 链一直往上找，直到找到一个【不在待删除列表】里的祖先，或者找到 None
+        curr_parent = full_parent_id
+        visited = set() # 防止死循环
+        while curr_parent in to_delete_ids and curr_parent not in visited:
+            visited.add(curr_parent)
+            # 找到要被删除的那个父节点
+            dead_parent_chunk = cleaned_chunks_map.get(curr_parent)
+            if dead_parent_chunk:
+                # 获取废弃父节点的爷爷节点
+                grand_parent = dead_parent_chunk.get("parent_id")
+                curr_parent = _resolve_full_id(file_id, grand_parent)
+            else:
+                curr_parent = None
+                break
+                
+        resolved_parent_map[chunk_id] = curr_parent
+
+    # 阶段 4: 重建有效列表
+    final_chunks = []
+    for chunk in chunks:
+        chunk_id = chunk["id"]
+        if chunk_id in to_delete_ids:
+            continue
+            
+        # 应用清洗后的内容
+        chunk["full_content"] = chunk.pop("_cleaned_content")
+        chunk["content"] = chunk["full_content"]
+        
+        # 应用修正后的 parent_id
+        # 因为我们存入 JSONL 的 parent_id 期望是原始的 "5" 这种格式，所以需要从 full_id 中提取出来
+        new_full_parent = resolved_parent_map.get(chunk_id)
+        if new_full_parent and "_chunk_" in new_full_parent:
+            new_short_parent = new_full_parent.split("_chunk_")[-1]
+            chunk["parent_id"] = new_short_parent
+            if "metadata" in chunk:
+                chunk["metadata"]["parent_id"] = new_short_parent
+        else:
+            chunk["parent_id"] = None
+            if "metadata" in chunk:
+                chunk["metadata"]["parent_id"] = None
+                
+        final_chunks.append(chunk)
+
+    return final_chunks
