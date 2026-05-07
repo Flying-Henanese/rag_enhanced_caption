@@ -10,7 +10,8 @@ from typing import List, Any, Optional, Callable
 from loguru import logger
 from dotenv import load_dotenv
 
-# 加载环境变量 (主要是获取 API KEY、ENDPOINT 等信息)
+# 加载环境变量 (确保配置加载的优先级)
+load_dotenv()
 
 def get_remote_embedding_client(
     api_key: Optional[str] = None,
@@ -18,36 +19,49 @@ def get_remote_embedding_client(
     model_name: Optional[str] = None
 ) -> Optional[Callable[[List[str]], Any]]:
     """
-    获取远程 API 驱动的 Embedding 客户端 (例如 OpenAI 或 SiliconFlow)。
-
-    如果入参为空，将自动从环境变量 (EMBEDDING_API_KEY 等) 获取配置。
-    
-    返回:
-        一个接收 List[str] 文本并返回对应 List[List[float]] 向量的函数。
-        如果未配置 api_key，则返回 None，代表不启用远程客户端。
+    获取通用的 Embedding API 客户端。
+    支持 OpenAI 兼容协议，适配云端服务 (SiliconFlow/OpenAI) 或本地私有化模型 (vLLM/Ollama)。
     """
+    default_endpoint = "https://api.siliconflow.cn/v1/embeddings"
+    
     api_key = api_key or os.getenv("EMBEDDING_API_KEY", "")
-    endpoint = endpoint or os.getenv("EMBEDDING_ENDPOINT", "https://api.siliconflow.cn/v1/embeddings")
+    endpoint = endpoint or os.getenv("EMBEDDING_ENDPOINT", default_endpoint)
     model_name = model_name or os.getenv("EMBEDDING_MODEL_NAME", "BAAI/bge-m3")
+    timeout = float(os.getenv("EMBEDDING_TIMEOUT", "60.0"))
 
-    if not api_key:
-        logger.warning("EMBEDDING_API_KEY 未找到。远程 Embedding 客户端将不会初始化。")
+    # 逻辑：如果使用默认云端服务则强制要求 API KEY；如果是自定义 Endpoint 则允许匿名访问
+    if not api_key and endpoint == default_endpoint:
+        logger.warning(f"未配置 EMBEDDING_API_KEY，且正在使用默认服务地址。客户端将不会初始化。")
         return None
 
-    def embed_fn(texts: List[str]) -> Any:
-        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    def embed_fn(texts: List[str]) -> List[List[float]]:
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+            
         payload = {"input": texts, "model": model_name}
         try:
-            logger.info(f"正在调用远程 Embedding API: {endpoint} (模型: {model_name}, 批量大小: {len(texts)})")
-            with httpx.Client(timeout=60.0) as client:
+            logger.info(f"发送 Embedding 请求: {endpoint} (模型: {model_name}, 批量: {len(texts)})")
+            # trust_env=False 确保在有代理的环境下，本地/内网请求不被拦截
+            with httpx.Client(timeout=timeout, trust_env=False, verify=False) as client:
                 response = client.post(endpoint, headers=headers, json=payload)
-                response.raise_for_status()
+                if response.status_code != 200:
+                    logger.error(f"Embedding API 返回错误 (状态码 {response.status_code}): {response.text}")
+                    return []
+                
                 data = response.json()
-                # 提取并返回所有句子的向量表示
-                return [item["embedding"] for item in data["data"]]
+                # 兼容性处理 A: OpenAI 标准结构
+                if isinstance(data, dict) and "data" in data and isinstance(data["data"], list):
+                    return [item["embedding"] for item in data["data"]]
+                # 兼容性处理 B: 某些本地服务直接返回向量列表
+                if isinstance(data, list):
+                    return data
+                
+                logger.error(f"无法解析 API 响应格式: {data}")
+                return []
         except Exception as e:
-            logger.error(f"远程 Embedding API 调用失败: {e}")
-            return None
+            logger.error(f"Embedding API 连接异常: {e}")
+            return []
 
     return embed_fn
 

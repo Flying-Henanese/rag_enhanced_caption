@@ -52,6 +52,9 @@ def test_multi_vector_retrieval_pipeline(mock_markdown_content):
     """
     测试：验证四级检索引擎是否正常工作，并打印详细的节点流转日志。
     """
+    if not os.getenv("EMBEDDING_API_KEY"):
+        pytest.skip("跳过测试：未检测到 EMBEDDING_API_KEY 环境变量。")
+
     # 1. 构建高级索引（模拟 backend/main.py 中的流程，使用真实服务）
     print("\n\n" + "="*60)
     print("🚀 [Step 1] 开始构建多向量索引 (Multi-Vector Index) [使用真实模型]")

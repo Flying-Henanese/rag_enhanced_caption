@@ -2,7 +2,7 @@ import asyncio
 import os
 import requests
 from typing import List, Dict, Any, Tuple, Optional
-from pydantic import Field
+from pydantic import Field, PrivateAttr
 from loguru import logger
 
 from llama_index.core import StorageContext, VectorStoreIndex, Settings, QueryBundle
@@ -21,14 +21,40 @@ from rag_enhanced_caption.chunker.embed_client import get_default_embedding_clie
 
 class ProjectEmbedding(BaseEmbedding):
     """包装自定义向量模型供 LlamaIndex 使用"""
+    _client: Any = PrivateAttr()
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._client = get_default_embedding_client()
+        if not self._client:
+            logger.error("ProjectEmbedding: 无法初始化 Embedding 客户端，请检查环境变量 EMBEDDING_API_KEY。")
+
     def _get_query_embedding(self, query: str) -> List[float]:
-        return get_default_embedding_client()([query])[0]
+        if not self._client:
+            raise ValueError("Embedding 客户端未配置。请在 .env 中设置 EMBEDDING_API_KEY。")
+        embeddings = self._client([query])
+        if not embeddings:
+            raise ValueError("Embedding API 返回空结果。请检查网络或 API 额度。")
+        return embeddings[0]
+
     async def _aget_query_embedding(self, query: str) -> List[float]:
         return self._get_query_embedding(query)
+
     def _get_text_embedding(self, text: str) -> List[float]:
-        return get_default_embedding_client()([text])[0]
+        if not self._client:
+            raise ValueError("Embedding 客户端未配置。请在 .env 中设置 EMBEDDING_API_KEY。")
+        embeddings = self._client([text])
+        if not embeddings:
+            raise ValueError("Embedding API 返回空结果。请检查网络或 API 额度。")
+        return embeddings[0]
+
     def _get_text_embeddings(self, texts: List[str]) -> List[List[float]]:
-        return get_default_embedding_client()(texts)
+        if not self._client:
+            raise ValueError("Embedding 客户端未配置。请在 .env 中设置 EMBEDDING_API_KEY。")
+        embeddings = self._client(texts)
+        if not embeddings:
+            raise ValueError("Embedding API 返回空结果。请检查网络或 API 额度。")
+        return embeddings
 
 class SiliconFlowRerank(BaseNodePostprocessor):
     """自定义 SiliconFlow 重排组件"""
