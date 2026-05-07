@@ -188,6 +188,7 @@ def chunk_markdown(
     current_content: list[str] = []
     title_stack: list[str] = [""] * 6
     state = {"last_text_idx": -1}
+    last_heading_idx = 0
 
     i = 0
     while i < len(tokens):
@@ -200,11 +201,12 @@ def chunk_markdown(
             state["last_text_idx"] = -1
             
             level = int(token.tag[1:]) if token.tag and len(token.tag) > 1 else 1
+            last_heading_idx = level - 1
             inline_token = tokens[i + 1]
             if inline_token.type == "inline":
                 full_title = inline_token.content.strip()
-                title_stack[level - 1] = full_title
-                for j in range(level, 6):
+                title_stack[last_heading_idx] = full_title
+                for j in range(last_heading_idx + 1, 6):
                     title_stack[j] = ""
             i += 3
             continue
@@ -237,47 +239,23 @@ def chunk_markdown(
             i += 1
             continue
             
-        elif token.type == "ordered_list_open":
-            list_content = []
-            j = i + 1
-            list_item_counter = 1
-            while j < len(tokens) and tokens[j].type != "ordered_list_close":
-                if tokens[j].type == "list_item_open":
-                    k = j + 1
-                    while k < len(tokens) and tokens[k].type != "list_item_close":
-                        if (
-                            tokens[k].type == "paragraph_open"
-                            and k + 1 < len(tokens)
-                            and tokens[k + 1].type == "inline"
-                        ):
-                            list_content.append(f"{list_item_counter}. {tokens[k + 1].content.strip()}")
-                            list_item_counter += 1
-                        k += 1
-                j += 1
-            if list_content:
-                current_content.extend(list_content)
-                _flush_content(result, current_content, title_stack, max_length, embed_fn, special_element=token.type, state=state)
-            i = j + 1
-            continue
+        elif token.type in ["ordered_list_open", "bullet_list_open"]:
+            _flush_content(result, current_content, title_stack, max_length, embed_fn, state=state)
             
-        elif token.type == "bullet_list_open":
-            list_content = []
+            if token.map:
+                start_line, end_line = token.map
+                list_text = "\n".join(original_lines[start_line:end_line])
+                current_content.append(list_text)
+            
+            target_level = token.level
+            close_type = token.type.replace("_open", "_close")
             j = i + 1
-            while j < len(tokens) and tokens[j].type != "bullet_list_close":
-                if tokens[j].type == "list_item_open":
-                    k = j + 1
-                    while k < len(tokens) and tokens[k].type != "list_item_close":
-                        if (
-                            tokens[k].type == "paragraph_open"
-                            and k + 1 < len(tokens)
-                            and tokens[k + 1].type == "inline"
-                        ):
-                            list_content.append(f"- {tokens[k + 1].content.strip()}")
-                        k += 1
+            while j < len(tokens):
+                if tokens[j].type == close_type and tokens[j].level == target_level:
+                    break
                 j += 1
-            if list_content:
-                current_content.extend(list_content)
-                _flush_content(result, current_content, title_stack, max_length, embed_fn, special_element=token.type, state=state)
+                
+            _flush_content(result, current_content, title_stack, max_length, embed_fn, special_element=token.type, state=state)
             i = j + 1
             continue
             
@@ -303,6 +281,18 @@ def chunk_markdown(
                                 break
                         j += 1
                     i = j - 1
+
+            # 处理 <summary> 作为虚拟标题
+            summary_match = re.search(r'<summary>(.*?)</summary>', content, re.IGNORECASE | re.DOTALL)
+            if summary_match:
+                summary_text = summary_match.group(1).strip()
+                summary_text = re.sub(r'<[^>]+>', '', summary_text).strip()
+                if summary_text:
+                    target_idx = last_heading_idx + 1
+                    if target_idx < 6:
+                        title_stack[target_idx] = summary_text
+                        for d in range(target_idx + 1, 6):
+                            title_stack[d] = ""
 
             is_converted_table = False
             if "<table" in content.lower():
