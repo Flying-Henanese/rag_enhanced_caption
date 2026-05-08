@@ -18,11 +18,18 @@ from ..nlp import count_tokens
 from ..embed_client import get_default_embedding_client
 from ..schema import SemanticChunk
 
+from ..utils.md_parser_utils import (
+    extract_table_block,
+    split_text_by_length_and_newline,
+)
+from ..utils.table_utils import html_table_to_key_value
+
 logger = logging.getLogger(__name__)
 
 _CONTROL_SPECIAL_ELEMENTS = {
     "none",
 }
+
 
 def _normalize_special_element(special_element: str | None) -> str:
     """过滤解析过程中的控制标签，避免其进入最终分类。"""
@@ -32,12 +39,6 @@ def _normalize_special_element(special_element: str | None) -> str:
     if not special or special in _CONTROL_SPECIAL_ELEMENTS:
         return "text"
     return special
-
-from ..utils.md_parser_utils import (
-    extract_table_block,
-    split_text_by_length_and_newline,
-)
-from ..utils.table_utils import html_table_to_key_value
 
 
 def _flush_content(
@@ -126,7 +127,6 @@ def _handle_image_caption(tokens, i, result, current_content, title_stack, max_l
         if rest and re.match(caption_pattern, rest, re.IGNORECASE):
             _flush_content(result, current_content, title_stack, max_length, embed_fn, state=state)
             current_content.append(content)
-            caption_title = rest.split("\n")[0].strip()
             _flush_content(result, current_content, title_stack, max_length, embed_fn, special_element="Image", state=state)
             return True, i + 3
 

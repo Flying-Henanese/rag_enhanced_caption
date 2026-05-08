@@ -11,9 +11,9 @@ import pytest
 from dotenv import load_dotenv
 load_dotenv()
 
-from rag_enhanced_caption.enhancer.processor import MarkdownMultimodalProcessor
-from rag_enhanced_caption.enhancer.vlm_client import create_default_vlm_client
-from rag_enhanced_caption.chunker.dispatcher import chunk_markdown
+from rag_enhanced_caption.enhancer.processor import MarkdownMultimodalProcessor  # noqa: E402
+from rag_enhanced_caption.enhancer.vlm_client import create_default_vlm_client  # noqa: E402
+from rag_enhanced_caption.chunker.dispatcher import chunk_markdown  # noqa: E402
 
 def test_vlm_table_summarization():
     """

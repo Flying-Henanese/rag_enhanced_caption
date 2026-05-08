@@ -18,10 +18,10 @@ else:
 
 sys.path.insert(0, str(root_dir))
 
-from rag_enhanced_caption.enhancer.processor import MarkdownMultimodalProcessor
-from rag_enhanced_caption.enhancer.vlm_client import create_default_vlm_client
-from rag_enhanced_caption.chunker.dispatcher import chunk_markdown
-from rag_enhanced_caption.enhancer.cleaning_utils import compress_and_relink_chunks
+from rag_enhanced_caption.enhancer.processor import MarkdownMultimodalProcessor  # noqa: E402
+from rag_enhanced_caption.enhancer.vlm_client import create_default_vlm_client  # noqa: E402
+from rag_enhanced_caption.chunker.dispatcher import chunk_markdown  # noqa: E402
+from rag_enhanced_caption.enhancer.cleaning_utils import compress_and_relink_chunks  # noqa: E402
 
 async def process_document(file_path: str):
     """

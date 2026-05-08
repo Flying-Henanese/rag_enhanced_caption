@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 import requests
 from typing import List, Optional
 from pydantic import Field
@@ -17,7 +18,6 @@ from llama_index.core.retrievers import AutoMergingRetriever, BaseRetriever
 
 load_dotenv()
 logger.remove()
-import sys
 logger.add(sys.stderr, level="WARNING")
 
 class SiliconFlowRerank(BaseNodePostprocessor):

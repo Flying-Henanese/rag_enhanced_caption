@@ -251,8 +251,6 @@ async def build_advanced_rag_index(
 
 # --- 3. 高级检索接口 ---
 
-from llama_index.core.retrievers import BaseRetriever
-
 class RerankedRetriever(BaseRetriever):
     """
     一个简单的包装检索器，用于在合并前执行精排。
