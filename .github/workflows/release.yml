@@ -12,6 +12,16 @@ jobs:
     permissions:
       contents: write
       id-token: write
+    env:
+      VLM_API_KEY: ${{ secrets.VLM_API_KEY }}
+      VLM_ENDPOINT: ${{ vars.VLM_ENDPOINT }}
+      VLM_MODEL_NAME: ${{ vars.VLM_MODEL_NAME }}
+      EMBEDDING_API_KEY: ${{ secrets.EMBEDDING_API_KEY }}
+      EMBEDDING_ENDPOINT: ${{ vars.EMBEDDING_ENDPOINT }}
+      EMBEDDING_MODEL_NAME: ${{ vars.EMBEDDING_MODEL_NAME }}
+      RERANK_API_KEY: ${{ secrets.RERANK_API_KEY }}
+      RERANK_ENDPOINT: ${{ vars.RERANK_ENDPOINT }}
+      RERANK_MODEL_NAME: ${{ vars.RERANK_MODEL_NAME }}
 
     steps:
       - uses: actions/checkout@v4

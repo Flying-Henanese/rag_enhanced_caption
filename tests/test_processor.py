@@ -8,6 +8,7 @@
 
 import asyncio
 import pytest
+import os
 
 from dotenv import load_dotenv
 
@@ -25,10 +26,10 @@ def test_vlm_table_summarization():
     """
 
     async def run_test():
-        vlm_client = create_default_vlm_client()
-        if not vlm_client:
-            pytest.skip("No VLM client configured.")
+        if not os.getenv("VLM_API_KEY"):
+            pytest.skip("No VLM_API_KEY configured.")
 
+        vlm_client = create_default_vlm_client()
         processor = MarkdownMultimodalProcessor(vlm_func=vlm_client, max_concurrency=1)
 
         test_md = """
