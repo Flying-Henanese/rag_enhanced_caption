@@ -1,8 +1,10 @@
 """
 定义了核心的数据结构。
 """
+
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional
+
 
 @dataclass
 class SemanticChunk:

@@ -7,6 +7,7 @@
 2. 使用 Embedding 模型将句子转为向量。
 3. 利用聚类算法（层次聚类）将语义上连贯的句子自动组合在一起。
 """
+
 from __future__ import annotations
 
 import re
@@ -81,10 +82,12 @@ def split_mixed_sentences(text: str) -> list[str]:
     return sentences
 
 
-def find_best_num_clusters(embeddings: Any, min_clusters: int = 2, max_clusters: int = 10) -> int:
+def find_best_num_clusters(
+    embeddings: Any, min_clusters: int = 2, max_clusters: int = 10
+) -> int:
     """
     (废弃 / 实验性策略) 使用轮廓系数 (Silhouette Score) 选择最佳聚类数量。
-    
+
     轮廓系数评估的是聚类的紧凑度和分离度，理论上能找到纯粹语义上的"最佳断点"。
     但在 RAG 场景中，该策略容易生成极其长或极其短的不均衡块，因此实际多采用固定大小预期来推导 K 值。
     """
@@ -97,7 +100,9 @@ def find_best_num_clusters(embeddings: Any, min_clusters: int = 2, max_clusters:
     limit_k = min(max_clusters, len(embeddings))
     for k in range(min_clusters, limit_k):
         # 注意：k 必须小于样本数，采用余弦相似度进行层次聚类
-        labels = AgglomerativeClustering(n_clusters=k, metric="cosine", linkage="average").fit_predict(embeddings)
+        labels = AgglomerativeClustering(
+            n_clusters=k, metric="cosine", linkage="average"
+        ).fit_predict(embeddings)
         if len(set(labels)) <= 1:
             continue
         score = silhouette_score(embeddings, labels, metric="cosine")
@@ -109,11 +114,11 @@ def find_best_num_clusters(embeddings: Any, min_clusters: int = 2, max_clusters:
 
 
 def semantic_chunking_with_auto_clusters(
-    text: str, 
-    embed_fn: Callable[[list[str]], Any] | None, 
-    token_count_fn: Callable[[str], int], 
+    text: str,
+    embed_fn: Callable[[list[str]], Any] | None,
+    token_count_fn: Callable[[str], int],
     max_chunk_size: int = 512,
-    strategy: str = "auto"
+    strategy: str = "auto",
 ) -> list[str]:
     """
     对传入的无结构长文本进行语义切分。
@@ -123,10 +128,10 @@ def semantic_chunking_with_auto_clusters(
         embed_fn: 获取向量表示的函数客户端。
         token_count_fn: 长度估算函数。
         max_chunk_size: 分块长度上限限制。
-        strategy: 
+        strategy:
             "auto" - (默认推荐) 根据长度预计算聚类 K 值，工程表现最优，保证长度受控均匀。
             "silhouette" - 使用轮廓系数寻找数学上的最佳语义界限，不强制物理长度均衡。
-            
+
     Returns:
         聚类合并后，依然符合长度阈值的句子组合列表。
     """
@@ -161,7 +166,9 @@ def semantic_chunking_with_auto_clusters(
     # 3. 确定要聚成多少簇 (K)
     if strategy == "silhouette":
         # 使用轮廓系数寻找最佳聚类数，范围根据句子数动态调整
-        best_k = find_best_num_clusters(embeddings, min_clusters=2, max_clusters=min(15, len(sentences)))
+        best_k = find_best_num_clusters(
+            embeddings, min_clusters=2, max_clusters=min(15, len(sentences))
+        )
     else:
         # 默认 auto 策略：基于目标长度上限，直接计算最理想的切分数
         # 假设均匀分布，需要切的块数 = 总长度 / 最大长度（向上取整）
@@ -169,7 +176,9 @@ def semantic_chunking_with_auto_clusters(
         best_k = min(best_k, len(sentences))
 
     # 4. 执行凝聚层次聚类算法 (将语义相似且相邻的句子标记为同一类)
-    labels = AgglomerativeClustering(n_clusters=best_k, metric="cosine", linkage="average").fit_predict(embeddings)
+    labels = AgglomerativeClustering(
+        n_clusters=best_k, metric="cosine", linkage="average"
+    ).fit_predict(embeddings)
 
     chunks = []
     current_chunk = ""
@@ -179,7 +188,9 @@ def semantic_chunking_with_auto_clusters(
     # 5. 根据聚类标签组装最终的分块
     for sentence, label, token_count in zip(sentences, labels, sentence_token_counts):
         # 发生切断的条件：聚类标签发生变化，或者长度达到了硬性截断上限
-        if label != current_label or (strategy == "auto" and current_chunk_tokens + token_count > max_chunk_size):
+        if label != current_label or (
+            strategy == "auto" and current_chunk_tokens + token_count > max_chunk_size
+        ):
             if current_chunk.strip():
                 chunks.append(current_chunk.strip())
             current_chunk = sentence

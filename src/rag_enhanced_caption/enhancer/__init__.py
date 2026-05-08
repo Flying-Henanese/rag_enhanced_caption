@@ -7,5 +7,5 @@ __all__ = [
     "MarkdownContextExtractor",
     "MarkdownMultimodalProcessor",
     "create_image_resolver",
-    "create_default_vlm_client"
+    "create_default_vlm_client",
 ]

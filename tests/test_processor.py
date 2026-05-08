@@ -5,21 +5,25 @@
 2. 语义增强：针对 Markdown 表格生成用于向量检索的摘要 (text_for_embedding)。
 3. 上下文注入：验证 VLM 是否能利用表格上方的文字背景生成更精准的描述。
 """
+
 import asyncio
 import pytest
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from rag_enhanced_caption.enhancer.processor import MarkdownMultimodalProcessor  # noqa: E402
 from rag_enhanced_caption.enhancer.vlm_client import create_default_vlm_client  # noqa: E402
 from rag_enhanced_caption.chunker.dispatcher import chunk_markdown  # noqa: E402
 
+
 def test_vlm_table_summarization():
     """
     Test using REAL VLM to generate high-density summaries for tables.
     Verifies that the prompt successfully extracts entities and doesn't output filenames or noise.
     """
+
     async def run_test():
         vlm_client = create_default_vlm_client()
         if not vlm_client:
@@ -47,17 +51,20 @@ The data clearly shows APAC taking the lead.
             markdown_content=test_md,
             file_id="test_financial",
             filename="report.md",
-            parser_config={"chunk_token_num": 512}
+            parser_config={"chunk_token_num": 512},
         )
 
         enriched_chunks = await processor.enrich_chunks(chunks)
 
         # Find the table chunk
-        table_chunk = next((c for c in enriched_chunks if c["metadata"]["element_type"] == "Table"), None)
-        
+        table_chunk = next(
+            (c for c in enriched_chunks if c["metadata"]["element_type"] == "Table"),
+            None,
+        )
+
         assert table_chunk is not None, "Failed to extract table chunk"
         assert "text_for_embedding" in table_chunk
-        
+
         # Asserting prompt effectiveness
         summary = table_chunk["text_for_embedding"]
         print("\n=======================================================")
@@ -66,19 +73,23 @@ The data clearly shows APAC taking the lead.
         print(f"Raw Table Data:\n{table_chunk['full_content']}")
         print("-------------------------------------------------------")
         print(f"VLM Generated Summary (Used for Vector Search):\n{summary}")
-        
+
         # Check entities
         entities = table_chunk["metadata"].get("entities", [])
         print("-------------------------------------------------------")
         print(f"VLM Extracted Entities:\n{entities}")
         print("=======================================================\n")
-        
+
         # The summary should be a JSON parsed result, so it shouldn't have raw JSON syntax like "{"
-        assert "{" not in summary and "}" not in summary, "VLM failed to parse JSON properly and leaked syntax"
-        
+        assert "{" not in summary and "}" not in summary, (
+            "VLM failed to parse JSON properly and leaked syntax"
+        )
+
         # It should mention APAC or Revenue since it's asked to extract entities/insights
-        assert "APAC" in summary.upper() or "REVENUE" in summary.upper(), "VLM failed to extract key table semantics"
-        
+        assert "APAC" in summary.upper() or "REVENUE" in summary.upper(), (
+            "VLM failed to extract key table semantics"
+        )
+
         # The metadata should contain extracted entities
         assert len(entities) > 0, "VLM failed to extract any entities"
 

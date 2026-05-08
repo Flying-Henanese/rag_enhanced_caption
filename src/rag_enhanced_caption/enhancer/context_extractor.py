@@ -4,6 +4,7 @@ from typing import List, Optional
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
 
+
 class MarkdownContextExtractor:
     """
     基于 markdown-it-py 的语境提取器。
@@ -14,23 +15,28 @@ class MarkdownContextExtractor:
         self.md = MarkdownIt("commonmark").enable("table")
         self.max_chars = max_chars
 
-    def extract_context(self, md_content: str, target_image_url: Optional[str] = None, target_idx: int = -1) -> str:
+    def extract_context(
+        self,
+        md_content: str,
+        target_image_url: Optional[str] = None,
+        target_idx: int = -1,
+    ) -> str:
         """
         提取元素在 Markdown 中的语境。
-        
+
         Args:
             md_content: 原始 Markdown 字符串
             target_image_url: 目标图片的 URL (用于定位)
             target_idx: 直接指定 Token 索引 (若已知)
-            
+
         Returns:
             提取出的语境字符串
         """
         tokens = self.md.parse(md_content)
-        
+
         if target_idx == -1 and target_image_url:
             target_idx = self._find_image_token_index(tokens, target_image_url)
-        
+
         if target_idx == -1:
             logger.warning("Target element not found in tokens.")
             return ""
@@ -58,23 +64,25 @@ class MarkdownContextExtractor:
         """
         context_parts = []
         current_length = 0
-        
+
         # 1. 寻找关联标题 (Heading Association)
         parent_header = ""
         search_indices = list(range(target_idx - 1, -1, -1))
         # 兜底：如果图片出现在章节的最上方，探测下方最近的标题
-        search_indices.extend(list(range(target_idx + 1, min(target_idx + 4, len(tokens)))))
+        search_indices.extend(
+            list(range(target_idx + 1, min(target_idx + 4, len(tokens))))
+        )
 
         for i in search_indices:
             # 遇到逻辑边界停止回溯 (仅针对向上回溯)
             if i < target_idx and tokens[i].type == "hr":
                 break
-                
+
             if tokens[i].type == "heading_open":
-                if i + 1 < len(tokens) and tokens[i+1].type == "inline":
-                    raw_content = tokens[i+1].content
+                if i + 1 < len(tokens) and tokens[i + 1].type == "inline":
+                    raw_content = tokens[i + 1].content
                     # 鲁棒性：尝试解析 | 路径，若无则使用原内容
-                    parts = [p.strip() for p in raw_content.split('|')]
+                    parts = [p.strip() for p in raw_content.split("|")]
                     if len(parts) > 1:
                         path = " > ".join(parts[:-1])
                         ctype = parts[-1]
@@ -82,51 +90,63 @@ class MarkdownContextExtractor:
                     else:
                         parent_header = f"[章节主题] {raw_content}"
                     break
-        
+
         if parent_header:
             context_parts.append(parent_header)
-            current_length += len(parent_header) + 1 # +1 for newline
+            current_length += len(parent_header) + 1  # +1 for newline
 
         # 2. 寻找上方邻近正文 (Previous Context Paragraphs)
         prev_paragraphs = []
-        max_prev_paras = 2 # 谨慎提取，上方最多 2 段
+        max_prev_paras = 2  # 谨慎提取，上方最多 2 段
         for i in range(target_idx - 1, -1, -1):
-            if tokens[i].type == "hr": # 碰到分隔符停止提取，避免跨块语境污染
+            if tokens[i].type == "hr":  # 碰到分隔符停止提取，避免跨块语境污染
                 break
             if tokens[i].type == "inline" and tokens[i].content.strip():
                 # 排除掉已经是标题的内容
-                if i > 0 and tokens[i-1].type != "heading_open":
+                if i > 0 and tokens[i - 1].type != "heading_open":
                     paragraph = tokens[i].content.strip()
                     # 动态长度检查：如果加入这段文字会超限，则停止收集 (保证整句完整)
-                    if current_length + len(paragraph) > self.max_chars and len(prev_paragraphs) > 0:
+                    if (
+                        current_length + len(paragraph) > self.max_chars
+                        and len(prev_paragraphs) > 0
+                    ):
                         break
-                    
+
                     prev_paragraphs.append(paragraph)
                     current_length += len(paragraph) + 1
-                    
-                    if len(prev_paragraphs) >= max_prev_paras or current_length >= self.max_chars:
+
+                    if (
+                        len(prev_paragraphs) >= max_prev_paras
+                        or current_length >= self.max_chars
+                    ):
                         break
-        
+
         # 3. 寻找下方邻近正文 (Next Context Paragraphs)
         next_paragraphs = []
-        max_next_paras = 2 # 谨慎提取，下方最多 2 段
+        max_next_paras = 2  # 谨慎提取，下方最多 2 段
         for i in range(target_idx + 1, len(tokens)):
-            if tokens[i].type == "hr": # 碰到分隔符停止向下提取
+            if tokens[i].type == "hr":  # 碰到分隔符停止向下提取
                 break
-            if tokens[i].type == "heading_open": # 碰到新章节标题，停止向下提取
+            if tokens[i].type == "heading_open":  # 碰到新章节标题，停止向下提取
                 break
             if tokens[i].type == "inline" and tokens[i].content.strip():
                 # 排除掉已经是标题的内容
-                if i > 0 and tokens[i-1].type != "heading_open":
+                if i > 0 and tokens[i - 1].type != "heading_open":
                     paragraph = tokens[i].content.strip()
                     # 动态长度检查：如果加入这段文字会超限，则停止收集
-                    if current_length + len(paragraph) > self.max_chars and len(next_paragraphs) > 0:
+                    if (
+                        current_length + len(paragraph) > self.max_chars
+                        and len(next_paragraphs) > 0
+                    ):
                         break
-                    
+
                     next_paragraphs.append(paragraph)
                     current_length += len(paragraph) + 1
-                    
-                    if len(next_paragraphs) >= max_next_paras or current_length >= self.max_chars:
+
+                    if (
+                        len(next_paragraphs) >= max_next_paras
+                        or current_length >= self.max_chars
+                    ):
                         break
 
         context_info = []
@@ -135,7 +155,7 @@ class MarkdownContextExtractor:
             context_info.extend(prev_paragraphs)
         if next_paragraphs:
             context_info.extend(next_paragraphs)
-            
+
         if context_info:
             context_parts.append("[语境信息]\n" + "\n".join(context_info))
 

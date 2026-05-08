@@ -2,6 +2,7 @@ import json
 import re
 from loguru import logger
 
+
 def try_parse_json(json_str: str) -> dict:
     """尝试解析 JSON 字符串，失败返回 None"""
     if not json_str or not json_str.strip():
@@ -11,15 +12,17 @@ def try_parse_json(json_str: str) -> dict:
     except (json.JSONDecodeError, ValueError):
         return None
 
+
 def basic_json_cleanup(json_str: str) -> str:
     """基础清理：处理常见的不规范 JSON 格式"""
     json_str = json_str.strip()
     # 修复中文引号或智能引号
-    json_str = json_str.replace('“', '"').replace('”', '"')
+    json_str = json_str.replace("“", '"').replace("”", '"')
     json_str = json_str.replace("‘", "'").replace("’", "'")
     # 修复多余的尾随逗号 (如 {"a": 1,} -> {"a": 1})
     json_str = re.sub(r",(\s*[}\]])", r"\1", json_str)
     return json_str
+
 
 def progressive_quote_fix(json_str: str) -> str:
     """进阶清理：处理转义字符和引号问题"""
@@ -35,16 +38,26 @@ def progressive_quote_fix(json_str: str) -> str:
     json_str = re.sub(r'"([^"]*(?:\\.[^"]*)*)"', fix_string_content, json_str)
     return json_str
 
+
 def extract_all_json_candidates(response: str) -> list:
     """从模型长文本回复中提取所有可能的 JSON 候选字符串"""
     candidates = []
 
     # 预处理：移除推理模型（如 DeepSeek-R1, Qwen-math）产生的思考过程标签
-    cleaned_response = re.sub(r"<think>.*?</think>", "", response, flags=re.DOTALL | re.IGNORECASE)
-    cleaned_response = re.sub(r"<thinking>.*?</thinking>", "", cleaned_response, flags=re.DOTALL | re.IGNORECASE)
+    cleaned_response = re.sub(
+        r"<think>.*?</think>", "", response, flags=re.DOTALL | re.IGNORECASE
+    )
+    cleaned_response = re.sub(
+        r"<thinking>.*?</thinking>",
+        "",
+        cleaned_response,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
 
     # 策略 1：匹配 Markdown 代码块中的 JSON (```json ... ```)
-    json_blocks = re.findall(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned_response, re.DOTALL)
+    json_blocks = re.findall(
+        r"```(?:json)?\s*(\{.*?\})\s*```", cleaned_response, re.DOTALL
+    )
     candidates.extend(json_blocks)
 
     # 策略 2：利用大括号平衡匹配提取纯 JSON 对象
@@ -67,16 +80,26 @@ def extract_all_json_candidates(response: str) -> list:
 
     return candidates
 
+
 def extract_fields_with_regex(response: str) -> dict:
     """终极兜底：当 JSON 完全损坏时，用正则强行提取关键字段"""
     logger.warning("JSON 解析完全失败，正在使用正则表达式回退提取字段")
 
     # 预处理：移除推理模型产生的思考过程标签，防止正则提取到思考内容
-    cleaned_response = re.sub(r"<think>.*?</think>", "", response, flags=re.DOTALL | re.IGNORECASE)
-    cleaned_response = re.sub(r"<thinking>.*?</thinking>", "", cleaned_response, flags=re.DOTALL | re.IGNORECASE)
+    cleaned_response = re.sub(
+        r"<think>.*?</think>", "", response, flags=re.DOTALL | re.IGNORECASE
+    )
+    cleaned_response = re.sub(
+        r"<thinking>.*?</thinking>",
+        "",
+        cleaned_response,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
 
     # 提取 detailed_description
-    desc_match = re.search(r'"detailed_description":\s*"([^"]*(?:\\.[^"]*)*)"', cleaned_response, re.DOTALL)
+    desc_match = re.search(
+        r'"detailed_description":\s*"([^"]*(?:\\.[^"]*)*)"', cleaned_response, re.DOTALL
+    )
     description = desc_match.group(1) if desc_match else ""
 
     # 提取 entity_name
@@ -88,7 +111,9 @@ def extract_fields_with_regex(response: str) -> dict:
     entity_type = type_match.group(1) if type_match else "unknown"
 
     # 提取 summary
-    summary_match = re.search(r'"summary":\s*"([^"]*(?:\\.[^"]*)*)"', cleaned_response, re.DOTALL)
+    summary_match = re.search(
+        r'"summary":\s*"([^"]*(?:\\.[^"]*)*)"', cleaned_response, re.DOTALL
+    )
     summary = summary_match.group(1) if summary_match else description[:100]
 
     return {
@@ -99,6 +124,7 @@ def extract_fields_with_regex(response: str) -> dict:
             "summary": summary,
         },
     }
+
 
 def robust_json_parse(response: str) -> dict:
     """

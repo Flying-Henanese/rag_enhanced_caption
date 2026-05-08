@@ -5,6 +5,7 @@
 2. 排序有效性：通过对比试验（一个相关节点，一个噪音节点），验证 Reranker 是否能将相关节点排在首位。
 3. 容错处理：验证在节点列表为空或 API 异常时，系统能否平稳降级。
 """
+
 import pytest
 import sys
 import os
@@ -14,10 +15,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from backend.rag_pipeline import SiliconFlowRerank  # noqa: E402
 from llama_index.core.schema import NodeWithScore, TextNode, QueryBundle  # noqa: E402
+
 
 def test_siliconflow_rerank_real_api():
     """
@@ -32,24 +35,32 @@ def test_siliconflow_rerank_real_api():
         api_key=api_key,
         endpoint=os.getenv("RERANK_ENDPOINT", "https://api.siliconflow.cn/v1/rerank"),
         model=os.getenv("RERANK_MODEL_NAME", "Qwen/Qwen3-Reranker-0.6B"),
-        top_n=1
+        top_n=1,
     )
-    
+
     # Create dummy nodes. One is highly relevant to the query, one is noise.
     nodes = [
         NodeWithScore(node=TextNode(text="Paris is the capital of France."), score=1.0),
-        NodeWithScore(node=TextNode(text="Quantum computing utilizes qubits for computation."), score=1.0)
+        NodeWithScore(
+            node=TextNode(text="Quantum computing utilizes qubits for computation."),
+            score=1.0,
+        ),
     ]
     query_bundle = QueryBundle(query_str="What is the capital of France?")
-    
+
     # Call the real API
     new_nodes = reranker._postprocess_nodes(nodes, query_bundle)
-    
+
     # Verify the reranker filtered and sorted the nodes correctly
     assert len(new_nodes) == 1, "Reranker failed to filter down to top_n=1"
-    assert "Paris" in new_nodes[0].node.text, "Reranker failed to pick the relevant context"
+    assert "Paris" in new_nodes[0].node.text, (
+        "Reranker failed to pick the relevant context"
+    )
     assert new_nodes[0].score > 0, "Reranker failed to assign a positive score"
-    print(f"\n[Real Rerank Passed] Kept relevant node with score: {new_nodes[0].score:.4f}")
+    print(
+        f"\n[Real Rerank Passed] Kept relevant node with score: {new_nodes[0].score:.4f}"
+    )
+
 
 def test_siliconflow_rerank_empty_nodes():
     api_key = os.getenv("RERANK_API_KEY")
@@ -58,7 +69,7 @@ def test_siliconflow_rerank_empty_nodes():
 
     reranker = SiliconFlowRerank(api_key=api_key, top_n=2)
     query_bundle = QueryBundle(query_str="Test query")
-    
+
     # Should handle empty lists gracefully without throwing an error
     new_nodes = reranker._postprocess_nodes([], query_bundle)
     assert new_nodes == []

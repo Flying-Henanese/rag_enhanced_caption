@@ -5,6 +5,7 @@
 无法被表达为标准的 Markdown 语法。本模块使用 BeautifulSoup 将那些以 HTML 形式嵌入的
 复杂表格进行降维或扁平化处理，便于 RAG 模型准确理解表格数据。
 """
+
 from __future__ import annotations
 
 from bs4 import BeautifulSoup
@@ -13,13 +14,13 @@ from bs4 import BeautifulSoup
 def html_table_to_markdown(html: str) -> str:
     """
     将复杂的 HTML 表格转换为扁平的 Markdown 表格格式。
-    
+
     会解析 colspan 和 rowspan，将跨行跨列的单元格值平铺展开到每个实际占据的网格中。
     但此方案在长表格上容易超限，故实际流程中可能更倾向于用键值对形式。
-    
+
     Args:
         html: 包含 <table> 标签的 html 字符串。
-        
+
     Returns:
         拼装好的 Markdown 表格字符串。
     """
@@ -96,19 +97,19 @@ def html_table_to_markdown(html: str) -> str:
 def html_table_to_key_value(html: str) -> list[str]:
     """
     将 HTML 表格转换为高度易懂的键值对（Key-Value）列表。
-    
+
     这是 RAG 领域的常用技巧：将表格行列关系转为自然语义。
     例如将：
     | 表头1 | 表头2 |
     | 值1   | 值2   |
     转换为：
     "表头1：值1；表头2：值2；"
-    
+
     优势：非常抗截断。若遇到超长表格被截断，这种格式不会导致截断后的下半段内容因丢失表头而失去语义。
-    
+
     Args:
         html: 包含 <table> 标签的 html 字符串。
-        
+
     Returns:
         字符串列表，列表每项对应原表的一行数据（已被转化为 KV 串）。
     """
@@ -158,7 +159,7 @@ def html_table_to_key_value(html: str) -> list[str]:
     headers = [h if h is not None else "" for h in headers]
 
     kv_lines = []
-    
+
     # 如果表格只有一行，把它自己当成数据行处理
     if len(grid) == 1:
         data_rows = grid
@@ -172,7 +173,7 @@ def html_table_to_key_value(html: str) -> list[str]:
         for i in range(min_len):
             key = headers[i]
             val = row_values[i] if row_values[i] is not None else ""
-            if key and key != val: # 当只有一行时，key 和 val 是一样的，避免重复 "A：A"
+            if key and key != val:  # 当只有一行时，key 和 val 是一样的，避免重复 "A：A"
                 row_parts.append(f"{key}：{val}")
             elif val:
                 row_parts.append(val)

@@ -11,7 +11,7 @@ __all__ = [
     "create_image_resolver",
     "create_default_vlm_client",
     "semantic_chunk_with_metadata",
-    "semantic_chunk_raw"
+    "semantic_chunk_raw",
 ]
 
 __version__ = "0.1.0"

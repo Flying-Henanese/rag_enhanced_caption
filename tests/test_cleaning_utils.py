@@ -8,11 +8,13 @@
 5. 验证孤岛图片类型纠正：包裹在 div 中的纯图片块脱水后，自动纠正类型为 Image 以供 VLM 处理。
 目的：确保注入到 Docstore 的内容在保留结构信息的同时，最大限度地减少 Token 占用和 LLM 干扰，并且保持关联图谱不断链。
 """
+
 from rag_enhanced_caption.enhancer.cleaning_utils import (
-    clean_html_for_llm, 
+    clean_html_for_llm,
     clean_markdown_styles,
-    compress_and_relink_chunks
+    compress_and_relink_chunks,
 )
+
 
 def test_clean_html_for_llm():
     # 测试 1: 带有样式的表格、注释、h标签
@@ -34,8 +36,8 @@ def test_clean_html_for_llm():
     </div>
     """
     cleaned = clean_html_for_llm(html_content)
-    assert "colspan=\"2\"" in cleaned
-    assert "rowspan=\"2\"" in cleaned
+    assert 'colspan="2"' in cleaned
+    assert 'rowspan="2"' in cleaned
     assert "style=" not in cleaned
     assert "class=" not in cleaned
     assert "id=" not in cleaned
@@ -45,6 +47,7 @@ def test_clean_html_for_llm():
     assert "<!--" not in cleaned and "无用的注释" not in cleaned
     assert "### 测试标题" in cleaned
     assert "<h3>" not in cleaned
+
 
 def test_clean_markdown_styles():
     # 测试 2: 带有 style 块的 Markdown 和 Base64
@@ -64,6 +67,7 @@ def test_clean_markdown_styles():
     assert "data:image/png;base64," not in cleaned_md
     assert "[BASE64_IMAGE_OMITTED]" in cleaned_md
 
+
 def test_compress_and_relink_chunks():
     # 测试 3: 空块过滤、指针跳跃继承、孤岛图片类型纠正
     raw_chunks = [
@@ -71,40 +75,40 @@ def test_compress_and_relink_chunks():
             "id": "fileA_chunk_0",
             "file_id": "fileA",
             "content": "Valid Text 1",
-            "parent_id": None
+            "parent_id": None,
         },
         {
             "id": "fileA_chunk_1",
             "file_id": "fileA",
-            "content": "<div align='center'>\n</div>", # 清洗后为空
-            "parent_id": "0"
+            "content": "<div align='center'>\n</div>",  # 清洗后为空
+            "parent_id": "0",
         },
         {
             "id": "fileA_chunk_2",
             "file_id": "fileA",
             "content": "![Image](img.png)",
-            "parent_id": "1" # 原本指向空块
+            "parent_id": "1",  # 原本指向空块
         },
         {
             "id": "fileA_chunk_3",
             "file_id": "fileA",
-            "content": "<span style='color:red'></span>", # 清洗后为空
-            "parent_id": "2"
+            "content": "<span style='color:red'></span>",  # 清洗后为空
+            "parent_id": "2",
         },
         {
             "id": "fileA_chunk_4",
             "file_id": "fileA",
             "content": "| Table |",
-            "parent_id": "3" # 指向空块，空块又指向 2
+            "parent_id": "3",  # 指向空块，空块又指向 2
         },
         {
             "id": "fileA_chunk_5",
             "file_id": "fileA",
             "content": "<div align='center'>![Hidden Image](hidden.png)</div>",
-            "metadata": {"element_type": "html_block"}, # 原本因为div被误判为html_block
+            "metadata": {"element_type": "html_block"},  # 原本因为div被误判为html_block
             "element_type": "html_block",
-            "parent_id": "4"
-        }
+            "parent_id": "4",
+        },
     ]
 
     compressed = compress_and_relink_chunks(raw_chunks)
@@ -124,7 +128,7 @@ def test_compress_and_relink_chunks():
 
     chunk_4 = next(c for c in compressed if c["id"] == "fileA_chunk_4")
     assert chunk_4["parent_id"] == "2", f"Expected parent 2, got {chunk_4['parent_id']}"
-    
+
     # 验证孤岛图片类型纠正
     chunk_5 = next(c for c in compressed if c["id"] == "fileA_chunk_5")
     assert chunk_5["element_type"] == "Image"

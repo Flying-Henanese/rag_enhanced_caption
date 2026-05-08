@@ -5,14 +5,15 @@ import httpx
 from pathlib import Path
 from loguru import logger
 
+
 def create_image_resolver(base_dir: str | Path = "."):
     """
     创建一个支持 本地/网络/Base64 的异步图像解析器。
-    
+
     Args:
         base_dir: Markdown 文件所在的物理目录。用于拼接相对路径。
                   例如，如果 MD 文件在 /doc/readme.md，这里应传入 "/doc"
-                  
+
     Returns:
         一个接收 image_url 并返回 bytes 的异步回调函数。
     """
@@ -27,9 +28,11 @@ def create_image_resolver(base_dir: str | Path = "."):
                 # 伪装 User-Agent，防止部分图床防盗链拦截
                 async with httpx.AsyncClient(follow_redirects=True) as client:
                     response = await client.get(
-                        image_url, 
-                        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'},
-                        timeout=15.0
+                        image_url,
+                        headers={
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+                        },
+                        timeout=15.0,
                     )
                     response.raise_for_status()
                     return response.content
@@ -45,11 +48,11 @@ def create_image_resolver(base_dir: str | Path = "."):
             # 解码 URL 编码的字符 (例如: "my%20image.png" -> "my image.png")
             local_path_str = urllib.parse.unquote(image_url)
             img_path = Path(local_path_str)
-            
+
             # 如果是相对路径，则基于传入的 base_dir 进行拼接
             if not img_path.is_absolute():
                 img_path = base_path / img_path
-                
+
             # 规范化路径 (消除 ../ 等符号)
             img_path = img_path.resolve()
 
