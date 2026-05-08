@@ -1,0 +1,1726 @@
+=================================== FAILURES ===================================
+____________________ test_html_table_parsing_and_enrichment ____________________
+    def test_html_table_parsing_and_enrichment():
+        async def run_test():
+            vlm_client = create_default_vlm_client()
+            if not vlm_client:
+                pytest.skip("No VLM client configured.")
+    
+            processor = MarkdownMultimodalProcessor(vlm_func=vlm_client, max_concurrency=1)
+    
+            test_md_content = """# Performance Overview
+    
+    This document outlines the performance.
+    
+    ## Complex HTML Table
+    
+    Here is a complex table layout that standard markdown cannot easily represent.
+    
+    <div align="center">
+        <table border="1">
+            <tr>
+                <th>Feature</th>
+                <th>Support</th>
+            </tr>
+            <tr>
+                <td>HTML Parsing</td>
+                <td>Yes</td>
+            </tr>
+        </table>
+    </div>
+    
+    End of document.
+    """
+    
+            chunks = chunk_markdown(markdown_content=test_md_content)
+            enriched_chunks = await processor.enrich_chunks(chunks)
+    
+            html_chunk = next((c for c in enriched_chunks if c["metadata"]["element_type"] == "Table KV" or c["metadata"]["element_type"] == "html_block"), None)
+    
+            assert html_chunk is not None, "Failed to identify HTML table chunk"
+    
+            summary = html_chunk["text_for_embedding"]
+    
+            print(f"\n=======================================================")
+            print(f"🤖 [VLM HTML Table Summary Check]")
+            print(f"=======================================================")
+            print(f"Raw HTML Table Data:\n{html_chunk['full_content']}")
+            print(f"-------------------------------------------------------")
+            print(f"VLM Generated Summary (Used for Vector Search):\n{summary}")
+    
+            entities = html_chunk["metadata"].get("entities", [])
+            print(f"-------------------------------------------------------")
+            print(f"VLM Extracted Entities:\n{entities}")
+            print(f"=======================================================\n")
+    
+            assert "{" not in summary and "}" not in summary, "VLM failed to parse JSON properly and leaked syntax"
+            assert len(entities) > 0, "VLM failed to extract entities from HTML table"
+    
+>       asyncio.run(run_test())
+tests/test_html_table.py:71: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/runners.py:204: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/runners.py:127: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/base_events.py:719: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+        async def run_test():
+            vlm_client = create_default_vlm_client()
+            if not vlm_client:
+                pytest.skip("No VLM client configured.")
+    
+            processor = MarkdownMultimodalProcessor(vlm_func=vlm_client, max_concurrency=1)
+    
+            test_md_content = """# Performance Overview
+    
+    This document outlines the performance.
+    
+    ## Complex HTML Table
+    
+    Here is a complex table layout that standard markdown cannot easily represent.
+    
+    <div align="center">
+        <table border="1">
+            <tr>
+                <th>Feature</th>
+                <th>Support</th>
+            </tr>
+            <tr>
+                <td>HTML Parsing</td>
+                <td>Yes</td>
+            </tr>
+        </table>
+    </div>
+    
+    End of document.
+    """
+    
+            chunks = chunk_markdown(markdown_content=test_md_content)
+            enriched_chunks = await processor.enrich_chunks(chunks)
+    
+            html_chunk = next((c for c in enriched_chunks if c["metadata"]["element_type"] == "Table KV" or c["metadata"]["element_type"] == "html_block"), None)
+    
+            assert html_chunk is not None, "Failed to identify HTML table chunk"
+    
+            summary = html_chunk["text_for_embedding"]
+    
+            print(f"\n=======================================================")
+            print(f"🤖 [VLM HTML Table Summary Check]")
+            print(f"=======================================================")
+            print(f"Raw HTML Table Data:\n{html_chunk['full_content']}")
+            print(f"-------------------------------------------------------")
+            print(f"VLM Generated Summary (Used for Vector Search):\n{summary}")
+    
+            entities = html_chunk["metadata"].get("entities", [])
+            print(f"-------------------------------------------------------")
+            print(f"VLM Extracted Entities:\n{entities}")
+            print(f"=======================================================\n")
+    
+            assert "{" not in summary and "}" not in summary, "VLM failed to parse JSON properly and leaked syntax"
+>           assert len(entities) > 0, "VLM failed to extract entities from HTML table"
+E           AssertionError: VLM failed to extract entities from HTML table
+E           assert 0 > 0
+E            +  where 0 = len([])
+tests/test_html_table.py:69: AssertionError
+----------------------------- Captured stdout call -----------------------------
+=======================================================
+🤖 [VLM HTML Table Summary Check]
+=======================================================
+Raw HTML Table Data:
+- Feature：HTML Parsing；Support：Yes；
+-------------------------------------------------------
+VLM Generated Summary (Used for Vector Search):
+- Feature：HTML Parsing；Support：Yes；
+-------------------------------------------------------
+VLM Extracted Entities:
+[]
+=======================================================
+----------------------------- Captured stderr call -----------------------------
+2026-05-06 07:56:46.002 | INFO     | rag_enhanced_caption.enhancer.vlm_client:default_vlm_call:50 - Using default VLM client. Endpoint: https://api.siliconflow.cn/v1/chat/completions, Model: Qwen/Qwen3-VL-8B-Instruct
+2026-05-06 07:57:47.093 | ERROR    | rag_enhanced_caption.enhancer.vlm_client:default_vlm_call:91 - VLM Call failed with exception: 
+Traceback (most recent call last):
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+                 │    │     │                    └ <Request [b'POST']>
+                 │    │     └ <function AsyncConnectionPool.handle_async_request at 0x7f8b47483c10>
+                 │    └ <AsyncConnectionPool [Requests: 0 active, 0 queued | Connections: 0 active, 0 idle]>
+                 └ <httpx.AsyncHTTPTransport object at 0x7f8b476a38c0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+                     │          └ <function AsyncHTTPConnection.handle_async_request at 0x7f8b47482090>
+                     └ <AsyncHTTPConnection ['https://api.siliconflow.cn:443', HTTP/1.1, CLOSED, Request Count: 1]>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 103, in handle_async_request
+    return await self._connection.handle_async_request(request)
+                 │    │           │                    └ <Request [b'POST']>
+                 │    │           └ <function AsyncHTTP11Connection.handle_async_request at 0x7f8b47457950>
+                 │    └ <AsyncHTTP11Connection ['https://api.siliconflow.cn:443', CLOSED, Request Count: 1]>
+                 └ <AsyncHTTPConnection ['https://api.siliconflow.cn:443', HTTP/1.1, CLOSED, Request Count: 1]>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_async/http11.py", line 136, in handle_async_request
+    raise exc
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_async/http11.py", line 106, in handle_async_request
+    ) = await self._receive_response_headers(**kwargs)
+              │    │                           └ {'request': <Request [b'POST']>}
+              │    └ <function AsyncHTTP11Connection._receive_response_headers at 0x7f8b47457ed0>
+              └ <AsyncHTTP11Connection ['https://api.siliconflow.cn:443', CLOSED, Request Count: 1]>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_async/http11.py", line 177, in _receive_response_headers
+    event = await self._receive_event(timeout=timeout)
+                  │    │                      └ 60.0
+                  │    └ <function AsyncHTTP11Connection._receive_event at 0x7f8b47480250>
+                  └ <AsyncHTTP11Connection ['https://api.siliconflow.cn:443', CLOSED, Request Count: 1]>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_async/http11.py", line 217, in _receive_event
+    data = await self._network_stream.read(
+                 │    │               └ <function AnyIOStream.read at 0x7f8b474b5430>
+                 │    └ <httpcore._backends.anyio.AnyIOStream object at 0x7f8b47607110>
+                 └ <AsyncHTTP11Connection ['https://api.siliconflow.cn:443', CLOSED, Request Count: 1]>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_backends/anyio.py", line 32, in read
+    with map_exceptions(exc_map):
+         │              └ {<class 'TimeoutError'>: <class 'httpcore.ReadTimeout'>, <class 'anyio.BrokenResourceError'>: <class 'httpcore.ReadError'>, <...
+         └ <function map_exceptions at 0x7f8b475da560>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    │    │   │     └ TimeoutError()
+    │    │   └ <method 'throw' of 'generator' objects>
+    │    └ <generator object map_exceptions at 0x7f8b475b0340>
+    └ <contextlib._GeneratorContextManager object at 0x7f8b476e7c40>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+          └ <class 'httpcore.ReadTimeout'>
+httpcore.ReadTimeout
+The above exception was the direct cause of the following exception:
+Traceback (most recent call last):
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/bin/pytest", line 10, in <module>
+    sys.exit(console_main())
+    │   │    └ <function console_main at 0x7f8b703277f0>
+    │   └ <built-in function exit>
+    └ <module 'sys' (built-in)>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/config/__init__.py", line 223, in console_main
+    code = main()
+           └ <function main at 0x7f8b70327690>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/config/__init__.py", line 199, in main
+    ret: ExitCode | int = config.hook.pytest_cmdline_main(config=config)
+         │                │      │    │                          └ <_pytest.config.Config object at 0x7f8b700cecf0>
+         │                │      │    └ <HookCaller 'pytest_cmdline_main'>
+         │                │      └ <_pytest.config.compat.PathAwareHookProxy object at 0x7f8b700cf8c0>
+         │                └ <_pytest.config.Config object at 0x7f8b700cecf0>
+         └ <enum 'ExitCode'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           │    │         │    │     │    │                  │       └ True
+           │    │         │    │     │    │                  └ {'config': <_pytest.config.Config object at 0x7f8b700cecf0>}
+           │    │         │    │     │    └ <member '_hookimpls' of 'HookCaller' objects>
+           │    │         │    │     └ <HookCaller 'pytest_cmdline_main'>
+           │    │         │    └ <member 'name' of 'HookCaller' objects>
+           │    │         └ <HookCaller 'pytest_cmdline_main'>
+           │    └ <member '_hookexec' of 'HookCaller' objects>
+           └ <HookCaller 'pytest_cmdline_main'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           │    │               │          │        │       └ True
+           │    │               │          │        └ {'config': <_pytest.config.Config object at 0x7f8b700cecf0>}
+           │    │               │          └ [<HookImpl plugin_name='main', plugin=<module '_pytest.main' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_captio...
+           │    │               └ 'pytest_cmdline_main'
+           │    └ <function _multicall at 0x7f8b70aebcc0>
+           └ <_pytest.config.PytestPluginManager object at 0x7f8b700cd7f0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+          │         │         └ [<_pytest.config.Config object at 0x7f8b700cecf0>]
+          │         └ <member 'function' of 'HookImpl' objects>
+          └ <HookImpl plugin_name='main', plugin=<module '_pytest.main' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_caption...
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/main.py", line 365, in pytest_cmdline_main
+    return wrap_session(config, _main)
+           │            │       └ <function _main at 0x7f8b702816f0>
+           │            └ <_pytest.config.Config object at 0x7f8b700cecf0>
+           └ <function wrap_session at 0x7f8b70281430>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/main.py", line 318, in wrap_session
+    session.exitstatus = doit(config, session) or 0
+    │       │            │    │       └ <Session  exitstatus=<ExitCode.OK: 0> testsfailed=0 testscollected=10>
+    │       │            │    └ <_pytest.config.Config object at 0x7f8b700cecf0>
+    │       │            └ <function _main at 0x7f8b702816f0>
+    │       └ <ExitCode.OK: 0>
+    └ <Session  exitstatus=<ExitCode.OK: 0> testsfailed=0 testscollected=10>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/main.py", line 372, in _main
+    config.hook.pytest_runtestloop(session=session)
+    │      │    │                          └ <Session  exitstatus=<ExitCode.OK: 0> testsfailed=0 testscollected=10>
+    │      │    └ <HookCaller 'pytest_runtestloop'>
+    │      └ <_pytest.config.compat.PathAwareHookProxy object at 0x7f8b700cf8c0>
+    └ <_pytest.config.Config object at 0x7f8b700cecf0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           │    │         │    │     │    │                  │       └ True
+           │    │         │    │     │    │                  └ {'session': <Session  exitstatus=<ExitCode.OK: 0> testsfailed=0 testscollected=10>}
+           │    │         │    │     │    └ <member '_hookimpls' of 'HookCaller' objects>
+           │    │         │    │     └ <HookCaller 'pytest_runtestloop'>
+           │    │         │    └ <member 'name' of 'HookCaller' objects>
+           │    │         └ <HookCaller 'pytest_runtestloop'>
+           │    └ <member '_hookexec' of 'HookCaller' objects>
+           └ <HookCaller 'pytest_runtestloop'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           │    │               │          │        │       └ True
+           │    │               │          │        └ {'session': <Session  exitstatus=<ExitCode.OK: 0> testsfailed=0 testscollected=10>}
+           │    │               │          └ [<HookImpl plugin_name='main', plugin=<module '_pytest.main' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_captio...
+           │    │               └ 'pytest_runtestloop'
+           │    └ <function _multicall at 0x7f8b70aebcc0>
+           └ <_pytest.config.PytestPluginManager object at 0x7f8b700cd7f0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+          │         │         └ [<Session  exitstatus=<ExitCode.OK: 0> testsfailed=0 testscollected=10>]
+          │         └ <member 'function' of 'HookImpl' objects>
+          └ <HookImpl plugin_name='main', plugin=<module '_pytest.main' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_caption...
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/main.py", line 396, in pytest_runtestloop
+    item.config.hook.pytest_runtest_protocol(item=item, nextitem=nextitem)
+    │    │                                        │              └ <Function test_html_table_regex_logic>
+    │    │                                        └ <Function test_html_table_parsing_and_enrichment>
+    │    └ <member 'config' of 'Node' objects>
+    └ <Function test_html_table_parsing_and_enrichment>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           │    │         │    │     │    │                  │       └ True
+           │    │         │    │     │    │                  └ {'item': <Function test_html_table_parsing_and_enrichment>, 'nextitem': <Function test_html_table_regex_logic>}
+           │    │         │    │     │    └ <member '_hookimpls' of 'HookCaller' objects>
+           │    │         │    │     └ <HookCaller 'pytest_runtest_protocol'>
+           │    │         │    └ <member 'name' of 'HookCaller' objects>
+           │    │         └ <HookCaller 'pytest_runtest_protocol'>
+           │    └ <member '_hookexec' of 'HookCaller' objects>
+           └ <HookCaller 'pytest_runtest_protocol'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           │    │               │          │        │       └ True
+           │    │               │          │        └ {'item': <Function test_html_table_parsing_and_enrichment>, 'nextitem': <Function test_html_table_regex_logic>}
+           │    │               │          └ [<HookImpl plugin_name='runner', plugin=<module '_pytest.runner' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_ca...
+           │    │               └ 'pytest_runtest_protocol'
+           │    └ <function _multicall at 0x7f8b70aebcc0>
+           └ <_pytest.config.PytestPluginManager object at 0x7f8b700cd7f0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+          │         │         └ [<Function test_html_table_parsing_and_enrichment>, <Function test_html_table_regex_logic>]
+          │         └ <member 'function' of 'HookImpl' objects>
+          └ <HookImpl plugin_name='runner', plugin=<module '_pytest.runner' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_cap...
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 118, in pytest_runtest_protocol
+    runtestprotocol(item, nextitem=nextitem)
+    │               │              └ <Function test_html_table_regex_logic>
+    │               └ <Function test_html_table_parsing_and_enrichment>
+    └ <function runtestprotocol at 0x7f8b7027f530>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 137, in runtestprotocol
+    reports.append(call_and_report(item, "call", log))
+    │       │      │               │             └ True
+    │       │      │               └ <Function test_html_table_parsing_and_enrichment>
+    │       │      └ <function call_and_report at 0x7f8b7027fed0>
+    │       └ <method 'append' of 'list' objects>
+    └ [<TestReport 'tests/test_html_table.py::test_html_table_parsing_and_enrichment' when='setup' outcome='passed'>]
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 244, in call_and_report
+    call = CallInfo.from_call(
+           │        └ <classmethod(<function CallInfo.from_call at 0x7f8b70280720>)>
+           └ <class '_pytest.runner.CallInfo'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 353, in from_call
+    result: TResult | None = func()
+            │                └ <function call_and_report.<locals>.<lambda> at 0x7f8b4759d6f0>
+            └ +TResult
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 245, in <lambda>
+    lambda: runtest_hook(item=item, **kwds),
+            │                 │       └ {}
+            │                 └ <Function test_html_table_parsing_and_enrichment>
+            └ <HookCaller 'pytest_runtest_call'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           │    │         │    │     │    │                  │       └ False
+           │    │         │    │     │    │                  └ {'item': <Function test_html_table_parsing_and_enrichment>}
+           │    │         │    │     │    └ <member '_hookimpls' of 'HookCaller' objects>
+           │    │         │    │     └ <HookCaller 'pytest_runtest_call'>
+           │    │         │    └ <member 'name' of 'HookCaller' objects>
+           │    │         └ <HookCaller 'pytest_runtest_call'>
+           │    └ <member '_hookexec' of 'HookCaller' objects>
+           └ <HookCaller 'pytest_runtest_call'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           │    │               │          │        │       └ False
+           │    │               │          │        └ {'item': <Function test_html_table_parsing_and_enrichment>}
+           │    │               │          └ [<HookImpl plugin_name='threadexception', plugin=<module '_pytest.threadexception' from '/home/runner/work/rag_enhanced_capti...
+           │    │               └ 'pytest_runtest_call'
+           │    └ <function _multicall at 0x7f8b70aebcc0>
+           └ <_pytest.config.PytestPluginManager object at 0x7f8b700cd7f0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+          │         │         └ [<Function test_html_table_parsing_and_enrichment>]
+          │         └ <member 'function' of 'HookImpl' objects>
+          └ <HookImpl plugin_name='runner', plugin=<module '_pytest.runner' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_cap...
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 179, in pytest_runtest_call
+    item.runtest()
+    │    └ <function Function.runtest at 0x7f8b7014fd70>
+    └ <Function test_html_table_parsing_and_enrichment>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/python.py", line 1720, in runtest
+    self.ihook.pytest_pyfunc_call(pyfuncitem=self)
+    │    │                                   └ <Function test_html_table_parsing_and_enrichment>
+    │    └ <property object at 0x7f8b703b5490>
+    └ <Function test_html_table_parsing_and_enrichment>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           │    │         │    │     │    │                  │       └ True
+           │    │         │    │     │    │                  └ {'pyfuncitem': <Function test_html_table_parsing_and_enrichment>}
+           │    │         │    │     │    └ <member '_hookimpls' of 'HookCaller' objects>
+           │    │         │    │     └ <HookCaller 'pytest_pyfunc_call'>
+           │    │         │    └ <member 'name' of 'HookCaller' objects>
+           │    │         └ <HookCaller 'pytest_pyfunc_call'>
+           │    └ <member '_hookexec' of 'HookCaller' objects>
+           └ <HookCaller 'pytest_pyfunc_call'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           │    │               │          │        │       └ True
+           │    │               │          │        └ {'pyfuncitem': <Function test_html_table_parsing_and_enrichment>}
+           │    │               │          └ [<HookImpl plugin_name='python', plugin=<module '_pytest.python' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_ca...
+           │    │               └ 'pytest_pyfunc_call'
+           │    └ <function _multicall at 0x7f8b70aebcc0>
+           └ <_pytest.config.PytestPluginManager object at 0x7f8b700cd7f0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+          │         │         └ [<Function test_html_table_parsing_and_enrichment>]
+          │         └ <member 'function' of 'HookImpl' objects>
+          └ <HookImpl plugin_name='python', plugin=<module '_pytest.python' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_cap...
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/python.py", line 166, in pytest_pyfunc_call
+    result = testfunction(**testargs)
+             │              └ {}
+             └ <function test_html_table_parsing_and_enrichment at 0x7f8b6d587b60>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/tests/test_html_table.py", line 71, in test_html_table_parsing_and_enrichment
+    asyncio.run(run_test())
+    │       │   └ <function test_html_table_parsing_and_enrichment.<locals>.run_test at 0x7f8b4759d9b0>
+    │       └ <function run at 0x7f8b6dcac720>
+    └ <module 'asyncio' from '/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/__init__.py'>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/runners.py", line 204, in run
+    return runner.run(main)
+           │      │   └ <coroutine object test_html_table_parsing_and_enrichment.<locals>.run_test at 0x7f8b47853840>
+           │      └ <function Runner.run at 0x7f8b6dcacb40>
+           └ <asyncio.runners.Runner object at 0x7f8b6dafeba0>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/runners.py", line 127, in run
+    return self._loop.run_until_complete(task)
+           │    │     │                  └ <Task pending name='Task-1' coro=<test_html_table_parsing_and_enrichment.<locals>.run_test() running at /home/runner/work/rag...
+           │    │     └ <function BaseEventLoop.run_until_complete at 0x7f8b6dca8e00>
+           │    └ <_UnixSelectorEventLoop running=True closed=False debug=False>
+           └ <asyncio.runners.Runner object at 0x7f8b6dafeba0>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/base_events.py", line 706, in run_until_complete
+    self.run_forever()
+    │    └ <function BaseEventLoop.run_forever at 0x7f8b6dca8d50>
+    └ <_UnixSelectorEventLoop running=True closed=False debug=False>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/base_events.py", line 677, in run_forever
+    self._run_once()
+    │    └ <function BaseEventLoop._run_once at 0x7f8b6dcaae50>
+    └ <_UnixSelectorEventLoop running=True closed=False debug=False>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/base_events.py", line 2057, in _run_once
+    handle._run()
+    │      └ <function Handle._run at 0x7f8b6d32aae0>
+    └ <Handle <_asyncio.TaskStepMethWrapper object at 0x7f8b478c3850>()>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/events.py", line 94, in _run
+    self._context.run(self._callback, *self._args)
+    │    │            │    │           │    └ <member '_args' of 'Handle' objects>
+    │    │            │    │           └ <Handle <_asyncio.TaskStepMethWrapper object at 0x7f8b478c3850>()>
+    │    │            │    └ <member '_callback' of 'Handle' objects>
+    │    │            └ <Handle <_asyncio.TaskStepMethWrapper object at 0x7f8b478c3850>()>
+    │    └ <member '_context' of 'Handle' objects>
+    └ <Handle <_asyncio.TaskStepMethWrapper object at 0x7f8b478c3850>()>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/src/rag_enhanced_caption/enhancer/processor.py", line 135, in _process_table_chunk
+    res = await self._analyze_element(user_prompt, prompts.TABLE_ANALYSIS_SYSTEM)
+                │    │                │            │       └ 'You are an expert data analyst and document parser. Your goal is to extract pure semantic meaning and business entities from...
+                │    │                │            └ <module 'rag_enhanced_caption.enhancer.prompts' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/src/rag_enh...
+                │    │                └ 'Please analyze this table.\n\nCRITICAL INSTRUCTION:\n1. Explain the core trends, structure, or key data points.\n2. Extract ...
+                │    └ <function MarkdownMultimodalProcessor._analyze_element at 0x7f8b6de62f00>
+                └ <rag_enhanced_caption.enhancer.processor.MarkdownMultimodalProcessor object at 0x7f8b476a3230>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/src/rag_enhanced_caption/enhancer/processor.py", line 84, in _analyze_element
+    raw_response = await self.vlm_func(user_prompt, system_prompt, image_base64, image_bytes)
+                         │    │        │            │              │             └ None
+                         │    │        │            │              └ None
+                         │    │        │            └ 'You are an expert data analyst and document parser. Your goal is to extract pure semantic meaning and business entities from...
+                         │    │        └ 'Please analyze this table.\n\nCRITICAL INSTRUCTION:\n1. Explain the core trends, structure, or key data points.\n2. Extract ...
+                         │    └ <function create_default_vlm_client.<locals>.configured_vlm_call at 0x7f8b4759dbc0>
+                         └ <rag_enhanced_caption.enhancer.processor.MarkdownMultimodalProcessor object at 0x7f8b476a3230>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/src/rag_enhanced_caption/enhancer/vlm_client.py", line 100, in configured_vlm_call
+    return await default_vlm_call(
+                 └ <function default_vlm_call at 0x7f8b6de63690>
+> File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/src/rag_enhanced_caption/enhancer/vlm_client.py", line 83, in default_vlm_call
+    response = await client.post(endpoint, headers=headers, json=payload)
+                     │      │    │                 │             └ {'model': 'Qwen/Qwen3-VL-8B-Instruct', 'messages': [{'role': 'system', 'content': 'You are an expert data analyst and documen...
+                     │      │    │                 └ {'Authorization': '***', 'Content-Type': 'application/json'}
+                     │      │    └ 'https://api.siliconflow.cn/v1/chat/completions'
+                     │      └ <function AsyncClient.post at 0x7f8b6f144300>
+                     └ <httpx.AsyncClient object at 0x7f8b476a3e00>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1859, in post
+    return await self.request(
+                 │    └ <function AsyncClient.request at 0x7f8b6f3bf530>
+                 └ <httpx.AsyncClient object at 0x7f8b476a3e00>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+                 │    │    │             │                      └ <httpx._client.UseClientDefault object at 0x7f8b6f3057f0>
+                 │    │    │             └ <httpx._client.UseClientDefault object at 0x7f8b6f3057f0>
+                 │    │    └ <Request('POST', 'https://api.siliconflow.cn/v1/chat/completions')>
+                 │    └ <function AsyncClient.send at 0x7f8b6f3bf8a0>
+                 └ <httpx.AsyncClient object at 0x7f8b476a3e00>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+                     │    └ <function AsyncClient._send_handling_auth at 0x7f8b6f3bfa00>
+                     └ <httpx.AsyncClient object at 0x7f8b476a3e00>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+                     │    └ <function AsyncClient._send_handling_redirects at 0x7f8b6f3bfb60>
+                     └ <httpx.AsyncClient object at 0x7f8b476a3e00>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+                     │    │                    └ <Request('POST', 'https://api.siliconflow.cn/v1/chat/completions')>
+                     │    └ <function AsyncClient._send_single_request at 0x7f8b6f3bfcc0>
+                     └ <httpx.AsyncClient object at 0x7f8b476a3e00>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+                     │         │                    └ <Request('POST', 'https://api.siliconflow.cn/v1/chat/completions')>
+                     │         └ <function AsyncHTTPTransport.handle_async_request at 0x7f8b6f3c8ca0>
+                     └ <httpx.AsyncHTTPTransport object at 0x7f8b476a38c0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+         └ <function map_httpcore_exceptions at 0x7f8b6f3f3690>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    │    │   │     └ ReadTimeout(TimeoutError())
+    │    │   └ <method 'throw' of 'generator' objects>
+    │    └ <generator object map_httpcore_exceptions at 0x7f8b475b0240>
+    └ <contextlib._GeneratorContextManager object at 0x7f8b47613310>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+          │          └ ''
+          └ <class 'httpx.ReadTimeout'>
+httpx.ReadTimeout
+2026-05-06 07:57:47.112 | ERROR    | rag_enhanced_caption.enhancer.processor:_analyze_element:93 - VLM analysis failed: 
+Traceback (most recent call last):
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+                 │    │     │                    └ <Request [b'POST']>
+                 │    │     └ <function AsyncConnectionPool.handle_async_request at 0x7f8b47483c10>
+                 │    └ <AsyncConnectionPool [Requests: 0 active, 0 queued | Connections: 0 active, 0 idle]>
+                 └ <httpx.AsyncHTTPTransport object at 0x7f8b476a38c0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+                     │          └ <function AsyncHTTPConnection.handle_async_request at 0x7f8b47482090>
+                     └ <AsyncHTTPConnection ['https://api.siliconflow.cn:443', HTTP/1.1, CLOSED, Request Count: 1]>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 103, in handle_async_request
+    return await self._connection.handle_async_request(request)
+                 │    │           │                    └ <Request [b'POST']>
+                 │    │           └ <function AsyncHTTP11Connection.handle_async_request at 0x7f8b47457950>
+                 │    └ <AsyncHTTP11Connection ['https://api.siliconflow.cn:443', CLOSED, Request Count: 1]>
+                 └ <AsyncHTTPConnection ['https://api.siliconflow.cn:443', HTTP/1.1, CLOSED, Request Count: 1]>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_async/http11.py", line 136, in handle_async_request
+    raise exc
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_async/http11.py", line 106, in handle_async_request
+    ) = await self._receive_response_headers(**kwargs)
+              │    │                           └ {'request': <Request [b'POST']>}
+              │    └ <function AsyncHTTP11Connection._receive_response_headers at 0x7f8b47457ed0>
+              └ <AsyncHTTP11Connection ['https://api.siliconflow.cn:443', CLOSED, Request Count: 1]>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_async/http11.py", line 177, in _receive_response_headers
+    event = await self._receive_event(timeout=timeout)
+                  │    │                      └ 60.0
+                  │    └ <function AsyncHTTP11Connection._receive_event at 0x7f8b47480250>
+                  └ <AsyncHTTP11Connection ['https://api.siliconflow.cn:443', CLOSED, Request Count: 1]>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_async/http11.py", line 217, in _receive_event
+    data = await self._network_stream.read(
+                 │    │               └ <function AnyIOStream.read at 0x7f8b474b5430>
+                 │    └ <httpcore._backends.anyio.AnyIOStream object at 0x7f8b47607110>
+                 └ <AsyncHTTP11Connection ['https://api.siliconflow.cn:443', CLOSED, Request Count: 1]>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_backends/anyio.py", line 32, in read
+    with map_exceptions(exc_map):
+         │              └ {<class 'TimeoutError'>: <class 'httpcore.ReadTimeout'>, <class 'anyio.BrokenResourceError'>: <class 'httpcore.ReadError'>, <...
+         └ <function map_exceptions at 0x7f8b475da560>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    │    │   │     └ TimeoutError()
+    │    │   └ <method 'throw' of 'generator' objects>
+    │    └ <generator object map_exceptions at 0x7f8b475b0340>
+    └ <contextlib._GeneratorContextManager object at 0x7f8b476e7c40>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+          └ <class 'httpcore.ReadTimeout'>
+httpcore.ReadTimeout
+The above exception was the direct cause of the following exception:
+Traceback (most recent call last):
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/bin/pytest", line 10, in <module>
+    sys.exit(console_main())
+    │   │    └ <function console_main at 0x7f8b703277f0>
+    │   └ <built-in function exit>
+    └ <module 'sys' (built-in)>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/config/__init__.py", line 223, in console_main
+    code = main()
+           └ <function main at 0x7f8b70327690>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/config/__init__.py", line 199, in main
+    ret: ExitCode | int = config.hook.pytest_cmdline_main(config=config)
+         │                │      │    │                          └ <_pytest.config.Config object at 0x7f8b700cecf0>
+         │                │      │    └ <HookCaller 'pytest_cmdline_main'>
+         │                │      └ <_pytest.config.compat.PathAwareHookProxy object at 0x7f8b700cf8c0>
+         │                └ <_pytest.config.Config object at 0x7f8b700cecf0>
+         └ <enum 'ExitCode'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           │    │         │    │     │    │                  │       └ True
+           │    │         │    │     │    │                  └ {'config': <_pytest.config.Config object at 0x7f8b700cecf0>}
+           │    │         │    │     │    └ <member '_hookimpls' of 'HookCaller' objects>
+           │    │         │    │     └ <HookCaller 'pytest_cmdline_main'>
+           │    │         │    └ <member 'name' of 'HookCaller' objects>
+           │    │         └ <HookCaller 'pytest_cmdline_main'>
+           │    └ <member '_hookexec' of 'HookCaller' objects>
+           └ <HookCaller 'pytest_cmdline_main'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           │    │               │          │        │       └ True
+           │    │               │          │        └ {'config': <_pytest.config.Config object at 0x7f8b700cecf0>}
+           │    │               │          └ [<HookImpl plugin_name='main', plugin=<module '_pytest.main' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_captio...
+           │    │               └ 'pytest_cmdline_main'
+           │    └ <function _multicall at 0x7f8b70aebcc0>
+           └ <_pytest.config.PytestPluginManager object at 0x7f8b700cd7f0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+          │         │         └ [<_pytest.config.Config object at 0x7f8b700cecf0>]
+          │         └ <member 'function' of 'HookImpl' objects>
+          └ <HookImpl plugin_name='main', plugin=<module '_pytest.main' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_caption...
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/main.py", line 365, in pytest_cmdline_main
+    return wrap_session(config, _main)
+           │            │       └ <function _main at 0x7f8b702816f0>
+           │            └ <_pytest.config.Config object at 0x7f8b700cecf0>
+           └ <function wrap_session at 0x7f8b70281430>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/main.py", line 318, in wrap_session
+    session.exitstatus = doit(config, session) or 0
+    │       │            │    │       └ <Session  exitstatus=<ExitCode.OK: 0> testsfailed=0 testscollected=10>
+    │       │            │    └ <_pytest.config.Config object at 0x7f8b700cecf0>
+    │       │            └ <function _main at 0x7f8b702816f0>
+    │       └ <ExitCode.OK: 0>
+    └ <Session  exitstatus=<ExitCode.OK: 0> testsfailed=0 testscollected=10>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/main.py", line 372, in _main
+    config.hook.pytest_runtestloop(session=session)
+    │      │    │                          └ <Session  exitstatus=<ExitCode.OK: 0> testsfailed=0 testscollected=10>
+    │      │    └ <HookCaller 'pytest_runtestloop'>
+    │      └ <_pytest.config.compat.PathAwareHookProxy object at 0x7f8b700cf8c0>
+    └ <_pytest.config.Config object at 0x7f8b700cecf0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           │    │         │    │     │    │                  │       └ True
+           │    │         │    │     │    │                  └ {'session': <Session  exitstatus=<ExitCode.OK: 0> testsfailed=0 testscollected=10>}
+           │    │         │    │     │    └ <member '_hookimpls' of 'HookCaller' objects>
+           │    │         │    │     └ <HookCaller 'pytest_runtestloop'>
+           │    │         │    └ <member 'name' of 'HookCaller' objects>
+           │    │         └ <HookCaller 'pytest_runtestloop'>
+           │    └ <member '_hookexec' of 'HookCaller' objects>
+           └ <HookCaller 'pytest_runtestloop'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           │    │               │          │        │       └ True
+           │    │               │          │        └ {'session': <Session  exitstatus=<ExitCode.OK: 0> testsfailed=0 testscollected=10>}
+           │    │               │          └ [<HookImpl plugin_name='main', plugin=<module '_pytest.main' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_captio...
+           │    │               └ 'pytest_runtestloop'
+           │    └ <function _multicall at 0x7f8b70aebcc0>
+           └ <_pytest.config.PytestPluginManager object at 0x7f8b700cd7f0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+          │         │         └ [<Session  exitstatus=<ExitCode.OK: 0> testsfailed=0 testscollected=10>]
+          │         └ <member 'function' of 'HookImpl' objects>
+          └ <HookImpl plugin_name='main', plugin=<module '_pytest.main' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_caption...
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/main.py", line 396, in pytest_runtestloop
+    item.config.hook.pytest_runtest_protocol(item=item, nextitem=nextitem)
+    │    │                                        │              └ <Function test_html_table_regex_logic>
+    │    │                                        └ <Function test_html_table_parsing_and_enrichment>
+    │    └ <member 'config' of 'Node' objects>
+    └ <Function test_html_table_parsing_and_enrichment>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           │    │         │    │     │    │                  │       └ True
+           │    │         │    │     │    │                  └ {'item': <Function test_html_table_parsing_and_enrichment>, 'nextitem': <Function test_html_table_regex_logic>}
+           │    │         │    │     │    └ <member '_hookimpls' of 'HookCaller' objects>
+           │    │         │    │     └ <HookCaller 'pytest_runtest_protocol'>
+           │    │         │    └ <member 'name' of 'HookCaller' objects>
+           │    │         └ <HookCaller 'pytest_runtest_protocol'>
+           │    └ <member '_hookexec' of 'HookCaller' objects>
+           └ <HookCaller 'pytest_runtest_protocol'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           │    │               │          │        │       └ True
+           │    │               │          │        └ {'item': <Function test_html_table_parsing_and_enrichment>, 'nextitem': <Function test_html_table_regex_logic>}
+           │    │               │          └ [<HookImpl plugin_name='runner', plugin=<module '_pytest.runner' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_ca...
+           │    │               └ 'pytest_runtest_protocol'
+           │    └ <function _multicall at 0x7f8b70aebcc0>
+           └ <_pytest.config.PytestPluginManager object at 0x7f8b700cd7f0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+          │         │         └ [<Function test_html_table_parsing_and_enrichment>, <Function test_html_table_regex_logic>]
+          │         └ <member 'function' of 'HookImpl' objects>
+          └ <HookImpl plugin_name='runner', plugin=<module '_pytest.runner' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_cap...
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 118, in pytest_runtest_protocol
+    runtestprotocol(item, nextitem=nextitem)
+    │               │              └ <Function test_html_table_regex_logic>
+    │               └ <Function test_html_table_parsing_and_enrichment>
+    └ <function runtestprotocol at 0x7f8b7027f530>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 137, in runtestprotocol
+    reports.append(call_and_report(item, "call", log))
+    │       │      │               │             └ True
+    │       │      │               └ <Function test_html_table_parsing_and_enrichment>
+    │       │      └ <function call_and_report at 0x7f8b7027fed0>
+    │       └ <method 'append' of 'list' objects>
+    └ [<TestReport 'tests/test_html_table.py::test_html_table_parsing_and_enrichment' when='setup' outcome='passed'>]
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 244, in call_and_report
+    call = CallInfo.from_call(
+           │        └ <classmethod(<function CallInfo.from_call at 0x7f8b70280720>)>
+           └ <class '_pytest.runner.CallInfo'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 353, in from_call
+    result: TResult | None = func()
+            │                └ <function call_and_report.<locals>.<lambda> at 0x7f8b4759d6f0>
+            └ +TResult
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 245, in <lambda>
+    lambda: runtest_hook(item=item, **kwds),
+            │                 │       └ {}
+            │                 └ <Function test_html_table_parsing_and_enrichment>
+            └ <HookCaller 'pytest_runtest_call'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           │    │         │    │     │    │                  │       └ False
+           │    │         │    │     │    │                  └ {'item': <Function test_html_table_parsing_and_enrichment>}
+           │    │         │    │     │    └ <member '_hookimpls' of 'HookCaller' objects>
+           │    │         │    │     └ <HookCaller 'pytest_runtest_call'>
+           │    │         │    └ <member 'name' of 'HookCaller' objects>
+           │    │         └ <HookCaller 'pytest_runtest_call'>
+           │    └ <member '_hookexec' of 'HookCaller' objects>
+           └ <HookCaller 'pytest_runtest_call'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           │    │               │          │        │       └ False
+           │    │               │          │        └ {'item': <Function test_html_table_parsing_and_enrichment>}
+           │    │               │          └ [<HookImpl plugin_name='threadexception', plugin=<module '_pytest.threadexception' from '/home/runner/work/rag_enhanced_capti...
+           │    │               └ 'pytest_runtest_call'
+           │    └ <function _multicall at 0x7f8b70aebcc0>
+           └ <_pytest.config.PytestPluginManager object at 0x7f8b700cd7f0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+          │         │         └ [<Function test_html_table_parsing_and_enrichment>]
+          │         └ <member 'function' of 'HookImpl' objects>
+          └ <HookImpl plugin_name='runner', plugin=<module '_pytest.runner' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_cap...
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 179, in pytest_runtest_call
+    item.runtest()
+    │    └ <function Function.runtest at 0x7f8b7014fd70>
+    └ <Function test_html_table_parsing_and_enrichment>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/python.py", line 1720, in runtest
+    self.ihook.pytest_pyfunc_call(pyfuncitem=self)
+    │    │                                   └ <Function test_html_table_parsing_and_enrichment>
+    │    └ <property object at 0x7f8b703b5490>
+    └ <Function test_html_table_parsing_and_enrichment>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           │    │         │    │     │    │                  │       └ True
+           │    │         │    │     │    │                  └ {'pyfuncitem': <Function test_html_table_parsing_and_enrichment>}
+           │    │         │    │     │    └ <member '_hookimpls' of 'HookCaller' objects>
+           │    │         │    │     └ <HookCaller 'pytest_pyfunc_call'>
+           │    │         │    └ <member 'name' of 'HookCaller' objects>
+           │    │         └ <HookCaller 'pytest_pyfunc_call'>
+           │    └ <member '_hookexec' of 'HookCaller' objects>
+           └ <HookCaller 'pytest_pyfunc_call'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           │    │               │          │        │       └ True
+           │    │               │          │        └ {'pyfuncitem': <Function test_html_table_parsing_and_enrichment>}
+           │    │               │          └ [<HookImpl plugin_name='python', plugin=<module '_pytest.python' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_ca...
+           │    │               └ 'pytest_pyfunc_call'
+           │    └ <function _multicall at 0x7f8b70aebcc0>
+           └ <_pytest.config.PytestPluginManager object at 0x7f8b700cd7f0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+          │         │         └ [<Function test_html_table_parsing_and_enrichment>]
+          │         └ <member 'function' of 'HookImpl' objects>
+          └ <HookImpl plugin_name='python', plugin=<module '_pytest.python' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_cap...
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/python.py", line 166, in pytest_pyfunc_call
+    result = testfunction(**testargs)
+             │              └ {}
+             └ <function test_html_table_parsing_and_enrichment at 0x7f8b6d587b60>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/tests/test_html_table.py", line 71, in test_html_table_parsing_and_enrichment
+    asyncio.run(run_test())
+    │       │   └ <function test_html_table_parsing_and_enrichment.<locals>.run_test at 0x7f8b4759d9b0>
+    │       └ <function run at 0x7f8b6dcac720>
+    └ <module 'asyncio' from '/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/__init__.py'>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/runners.py", line 204, in run
+    return runner.run(main)
+           │      │   └ <coroutine object test_html_table_parsing_and_enrichment.<locals>.run_test at 0x7f8b47853840>
+           │      └ <function Runner.run at 0x7f8b6dcacb40>
+           └ <asyncio.runners.Runner object at 0x7f8b6dafeba0>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/runners.py", line 127, in run
+    return self._loop.run_until_complete(task)
+           │    │     │                  └ <Task pending name='Task-1' coro=<test_html_table_parsing_and_enrichment.<locals>.run_test() running at /home/runner/work/rag...
+           │    │     └ <function BaseEventLoop.run_until_complete at 0x7f8b6dca8e00>
+           │    └ <_UnixSelectorEventLoop running=True closed=False debug=False>
+           └ <asyncio.runners.Runner object at 0x7f8b6dafeba0>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/base_events.py", line 706, in run_until_complete
+    self.run_forever()
+    │    └ <function BaseEventLoop.run_forever at 0x7f8b6dca8d50>
+    └ <_UnixSelectorEventLoop running=True closed=False debug=False>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/base_events.py", line 677, in run_forever
+    self._run_once()
+    │    └ <function BaseEventLoop._run_once at 0x7f8b6dcaae50>
+    └ <_UnixSelectorEventLoop running=True closed=False debug=False>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/base_events.py", line 2057, in _run_once
+    handle._run()
+    │      └ <function Handle._run at 0x7f8b6d32aae0>
+    └ <Handle <_asyncio.TaskStepMethWrapper object at 0x7f8b478c3850>()>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/events.py", line 94, in _run
+    self._context.run(self._callback, *self._args)
+    │    │            │    │           │    └ <member '_args' of 'Handle' objects>
+    │    │            │    │           └ <Handle <_asyncio.TaskStepMethWrapper object at 0x7f8b478c3850>()>
+    │    │            │    └ <member '_callback' of 'Handle' objects>
+    │    │            └ <Handle <_asyncio.TaskStepMethWrapper object at 0x7f8b478c3850>()>
+    │    └ <member '_context' of 'Handle' objects>
+    └ <Handle <_asyncio.TaskStepMethWrapper object at 0x7f8b478c3850>()>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/src/rag_enhanced_caption/enhancer/processor.py", line 135, in _process_table_chunk
+    res = await self._analyze_element(user_prompt, prompts.TABLE_ANALYSIS_SYSTEM)
+                │    │                │            │       └ 'You are an expert data analyst and document parser. Your goal is to extract pure semantic meaning and business entities from...
+                │    │                │            └ <module 'rag_enhanced_caption.enhancer.prompts' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/src/rag_enh...
+                │    │                └ 'Please analyze this table.\n\nCRITICAL INSTRUCTION:\n1. Explain the core trends, structure, or key data points.\n2. Extract ...
+                │    └ <function MarkdownMultimodalProcessor._analyze_element at 0x7f8b6de62f00>
+                └ <rag_enhanced_caption.enhancer.processor.MarkdownMultimodalProcessor object at 0x7f8b476a3230>
+> File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/src/rag_enhanced_caption/enhancer/processor.py", line 84, in _analyze_element
+    raw_response = await self.vlm_func(user_prompt, system_prompt, image_base64, image_bytes)
+                         │    │        │            │              │             └ None
+                         │    │        │            │              └ None
+                         │    │        │            └ 'You are an expert data analyst and document parser. Your goal is to extract pure semantic meaning and business entities from...
+                         │    │        └ 'Please analyze this table.\n\nCRITICAL INSTRUCTION:\n1. Explain the core trends, structure, or key data points.\n2. Extract ...
+                         │    └ <function create_default_vlm_client.<locals>.configured_vlm_call at 0x7f8b4759dbc0>
+                         └ <rag_enhanced_caption.enhancer.processor.MarkdownMultimodalProcessor object at 0x7f8b476a3230>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/src/rag_enhanced_caption/enhancer/vlm_client.py", line 100, in configured_vlm_call
+    return await default_vlm_call(
+                 └ <function default_vlm_call at 0x7f8b6de63690>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/src/rag_enhanced_caption/enhancer/vlm_client.py", line 83, in default_vlm_call
+    response = await client.post(endpoint, headers=headers, json=payload)
+                     │      │    │                 │             └ {'model': 'Qwen/Qwen3-VL-8B-Instruct', 'messages': [{'role': 'system', 'content': 'You are an expert data analyst and documen...
+                     │      │    │                 └ {'Authorization': '***', 'Content-Type': 'application/json'}
+                     │      │    └ 'https://api.siliconflow.cn/v1/chat/completions'
+                     │      └ <function AsyncClient.post at 0x7f8b6f144300>
+                     └ <httpx.AsyncClient object at 0x7f8b476a3e00>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1859, in post
+    return await self.request(
+                 │    └ <function AsyncClient.request at 0x7f8b6f3bf530>
+                 └ <httpx.AsyncClient object at 0x7f8b476a3e00>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+                 │    │    │             │                      └ <httpx._client.UseClientDefault object at 0x7f8b6f3057f0>
+                 │    │    │             └ <httpx._client.UseClientDefault object at 0x7f8b6f3057f0>
+                 │    │    └ <Request('POST', 'https://api.siliconflow.cn/v1/chat/completions')>
+                 │    └ <function AsyncClient.send at 0x7f8b6f3bf8a0>
+                 └ <httpx.AsyncClient object at 0x7f8b476a3e00>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+                     │    └ <function AsyncClient._send_handling_auth at 0x7f8b6f3bfa00>
+                     └ <httpx.AsyncClient object at 0x7f8b476a3e00>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+                     │    └ <function AsyncClient._send_handling_redirects at 0x7f8b6f3bfb60>
+                     └ <httpx.AsyncClient object at 0x7f8b476a3e00>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+                     │    │                    └ <Request('POST', 'https://api.siliconflow.cn/v1/chat/completions')>
+                     │    └ <function AsyncClient._send_single_request at 0x7f8b6f3bfcc0>
+                     └ <httpx.AsyncClient object at 0x7f8b476a3e00>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+                     │         │                    └ <Request('POST', 'https://api.siliconflow.cn/v1/chat/completions')>
+                     │         └ <function AsyncHTTPTransport.handle_async_request at 0x7f8b6f3c8ca0>
+                     └ <httpx.AsyncHTTPTransport object at 0x7f8b476a38c0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+         └ <function map_httpcore_exceptions at 0x7f8b6f3f3690>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    │    │   │     └ ReadTimeout(TimeoutError())
+    │    │   └ <method 'throw' of 'generator' objects>
+    │    └ <generator object map_httpcore_exceptions at 0x7f8b475b0240>
+    └ <contextlib._GeneratorContextManager object at 0x7f8b47613310>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+          │          └ ''
+          └ <class 'httpx.ReadTimeout'>
+httpx.ReadTimeout
+_________________________ test_vlm_table_summarization _________________________
+    def test_vlm_table_summarization():
+        """
+        Test using REAL VLM to generate high-density summaries for tables.
+        Verifies that the prompt successfully extracts entities and doesn't output filenames or noise.
+        """
+        async def run_test():
+            vlm_client = create_default_vlm_client()
+            if not vlm_client:
+                pytest.skip("No VLM client configured.")
+    
+            processor = MarkdownMultimodalProcessor(vlm_func=vlm_client, max_concurrency=1)
+    
+            test_md = """
+    # Q3 Financial Report
+    
+    ## Revenue Breakdown
+    
+    Here is the revenue breakdown for Q3 2023 across different regions. We saw a significant increase in the APAC region due to new product launches.
+    
+    | Region | Q3 2023 Revenue (M) | YoY Growth |
+    |---|---|---|
+    | North America | $120.5 | +5% |
+    | EMEA | $85.2 | -2% |
+    | APAC | $150.8 | +25% |
+    
+    The data clearly shows APAC taking the lead.
+    """
+    
+            chunks = chunk_markdown(
+                markdown_content=test_md,
+                file_id="test_financial",
+                filename="report.md",
+                parser_config={"chunk_token_num": 512}
+            )
+    
+            enriched_chunks = await processor.enrich_chunks(chunks)
+    
+            # Find the table chunk
+            table_chunk = next((c for c in enriched_chunks if c["metadata"]["element_type"] == "Table"), None)
+    
+            assert table_chunk is not None, "Failed to extract table chunk"
+            assert "text_for_embedding" in table_chunk
+    
+            # Asserting prompt effectiveness
+            summary = table_chunk["text_for_embedding"]
+            print(f"\n=======================================================")
+            print(f"🤖 [VLM Table Summary Check]")
+            print(f"=======================================================")
+            print(f"Raw Table Data:\n{table_chunk['full_content']}")
+            print(f"-------------------------------------------------------")
+            print(f"VLM Generated Summary (Used for Vector Search):\n{summary}")
+    
+            # Check entities
+            entities = table_chunk["metadata"].get("entities", [])
+            print(f"-------------------------------------------------------")
+            print(f"VLM Extracted Entities:\n{entities}")
+            print(f"=======================================================\n")
+    
+            # The summary should be a JSON parsed result, so it shouldn't have raw JSON syntax like "{"
+            assert "{" not in summary and "}" not in summary, "VLM failed to parse JSON properly and leaked syntax"
+    
+            # It should mention APAC or Revenue since it's asked to extract entities/insights
+            assert "APAC" in summary.upper() or "REVENUE" in summary.upper(), "VLM failed to extract key table semantics"
+    
+            # The metadata should contain extracted entities
+            assert len(entities) > 0, "VLM failed to extract any entities"
+    
+>       asyncio.run(run_test())
+tests/test_processor.py:82: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/runners.py:204: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/runners.py:127: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/base_events.py:719: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+        async def run_test():
+            vlm_client = create_default_vlm_client()
+            if not vlm_client:
+                pytest.skip("No VLM client configured.")
+    
+            processor = MarkdownMultimodalProcessor(vlm_func=vlm_client, max_concurrency=1)
+    
+            test_md = """
+    # Q3 Financial Report
+    
+    ## Revenue Breakdown
+    
+    Here is the revenue breakdown for Q3 2023 across different regions. We saw a significant increase in the APAC region due to new product launches.
+    
+    | Region | Q3 2023 Revenue (M) | YoY Growth |
+    |---|---|---|
+    | North America | $120.5 | +5% |
+    | EMEA | $85.2 | -2% |
+    | APAC | $150.8 | +25% |
+    
+    The data clearly shows APAC taking the lead.
+    """
+    
+            chunks = chunk_markdown(
+                markdown_content=test_md,
+                file_id="test_financial",
+                filename="report.md",
+                parser_config={"chunk_token_num": 512}
+            )
+    
+            enriched_chunks = await processor.enrich_chunks(chunks)
+    
+            # Find the table chunk
+            table_chunk = next((c for c in enriched_chunks if c["metadata"]["element_type"] == "Table"), None)
+    
+            assert table_chunk is not None, "Failed to extract table chunk"
+            assert "text_for_embedding" in table_chunk
+    
+            # Asserting prompt effectiveness
+            summary = table_chunk["text_for_embedding"]
+            print(f"\n=======================================================")
+            print(f"🤖 [VLM Table Summary Check]")
+            print(f"=======================================================")
+            print(f"Raw Table Data:\n{table_chunk['full_content']}")
+            print(f"-------------------------------------------------------")
+            print(f"VLM Generated Summary (Used for Vector Search):\n{summary}")
+    
+            # Check entities
+            entities = table_chunk["metadata"].get("entities", [])
+            print(f"-------------------------------------------------------")
+            print(f"VLM Extracted Entities:\n{entities}")
+            print(f"=======================================================\n")
+    
+            # The summary should be a JSON parsed result, so it shouldn't have raw JSON syntax like "{"
+            assert "{" not in summary and "}" not in summary, "VLM failed to parse JSON properly and leaked syntax"
+    
+            # It should mention APAC or Revenue since it's asked to extract entities/insights
+            assert "APAC" in summary.upper() or "REVENUE" in summary.upper(), "VLM failed to extract key table semantics"
+    
+            # The metadata should contain extracted entities
+>           assert len(entities) > 0, "VLM failed to extract any entities"
+E           AssertionError: VLM failed to extract any entities
+E           assert 0 > 0
+E            +  where 0 = len([])
+tests/test_processor.py:80: AssertionError
+----------------------------- Captured stdout call -----------------------------
+=======================================================
+🤖 [VLM Table Summary Check]
+=======================================================
+Raw Table Data:
+| Region | Q3 2023 Revenue (M) | YoY Growth |
+|---|---|---|
+| North America | $120.5 | +5% |
+| EMEA | $85.2 | -2% |
+| APAC | $150.8 | +25% |
+-------------------------------------------------------
+VLM Generated Summary (Used for Vector Search):
+| Region | Q3 2023 Revenue (M) | YoY Growth |
+|---|---|---|
+| North America | $120.5 | +5% |
+| EMEA | $85.2 | -2% |
+| APAC | $150.8 | +25% |
+-------------------------------------------------------
+VLM Extracted Entities:
+[]
+=======================================================
+----------------------------- Captured stderr call -----------------------------
+2026-05-06 07:57:47.302 | INFO     | rag_enhanced_caption.enhancer.vlm_client:default_vlm_call:50 - Using default VLM client. Endpoint: https://api.siliconflow.cn/v1/chat/completions, Model: Qwen/Qwen3-VL-8B-Instruct
+2026-05-06 07:58:48.629 | ERROR    | rag_enhanced_caption.enhancer.vlm_client:default_vlm_call:91 - VLM Call failed with exception: 
+Traceback (most recent call last):
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+                 │    │     │                    └ <Request [b'POST']>
+                 │    │     └ <function AsyncConnectionPool.handle_async_request at 0x7f8b47483c10>
+                 │    └ <AsyncConnectionPool [Requests: 0 active, 0 queued | Connections: 0 active, 0 idle]>
+                 └ <httpx.AsyncHTTPTransport object at 0x7f8b45238050>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+                     │          └ <function AsyncHTTPConnection.handle_async_request at 0x7f8b47482090>
+                     └ <AsyncHTTPConnection ['https://api.siliconflow.cn:443', HTTP/1.1, CLOSED, Request Count: 1]>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 103, in handle_async_request
+    return await self._connection.handle_async_request(request)
+                 │    │           │                    └ <Request [b'POST']>
+                 │    │           └ <function AsyncHTTP11Connection.handle_async_request at 0x7f8b47457950>
+                 │    └ <AsyncHTTP11Connection ['https://api.siliconflow.cn:443', CLOSED, Request Count: 1]>
+                 └ <AsyncHTTPConnection ['https://api.siliconflow.cn:443', HTTP/1.1, CLOSED, Request Count: 1]>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_async/http11.py", line 136, in handle_async_request
+    raise exc
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_async/http11.py", line 106, in handle_async_request
+    ) = await self._receive_response_headers(**kwargs)
+              │    │                           └ {'request': <Request [b'POST']>}
+              │    └ <function AsyncHTTP11Connection._receive_response_headers at 0x7f8b47457ed0>
+              └ <AsyncHTTP11Connection ['https://api.siliconflow.cn:443', CLOSED, Request Count: 1]>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_async/http11.py", line 177, in _receive_response_headers
+    event = await self._receive_event(timeout=timeout)
+                  │    │                      └ 60.0
+                  │    └ <function AsyncHTTP11Connection._receive_event at 0x7f8b47480250>
+                  └ <AsyncHTTP11Connection ['https://api.siliconflow.cn:443', CLOSED, Request Count: 1]>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_async/http11.py", line 217, in _receive_event
+    data = await self._network_stream.read(
+                 │    │               └ <function AnyIOStream.read at 0x7f8b474b5430>
+                 │    └ <httpcore._backends.anyio.AnyIOStream object at 0x7f8b47602ea0>
+                 └ <AsyncHTTP11Connection ['https://api.siliconflow.cn:443', CLOSED, Request Count: 1]>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_backends/anyio.py", line 32, in read
+    with map_exceptions(exc_map):
+         │              └ {<class 'TimeoutError'>: <class 'httpcore.ReadTimeout'>, <class 'anyio.BrokenResourceError'>: <class 'httpcore.ReadError'>, <...
+         └ <function map_exceptions at 0x7f8b475da560>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    │    │   │     └ TimeoutError()
+    │    │   └ <method 'throw' of 'generator' objects>
+    │    └ <generator object map_exceptions at 0x7f8b47487240>
+    └ <contextlib._GeneratorContextManager object at 0x7f8b474a7c40>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+          └ <class 'httpcore.ReadTimeout'>
+httpcore.ReadTimeout
+The above exception was the direct cause of the following exception:
+Traceback (most recent call last):
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/bin/pytest", line 10, in <module>
+    sys.exit(console_main())
+    │   │    └ <function console_main at 0x7f8b703277f0>
+    │   └ <built-in function exit>
+    └ <module 'sys' (built-in)>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/config/__init__.py", line 223, in console_main
+    code = main()
+           └ <function main at 0x7f8b70327690>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/config/__init__.py", line 199, in main
+    ret: ExitCode | int = config.hook.pytest_cmdline_main(config=config)
+         │                │      │    │                          └ <_pytest.config.Config object at 0x7f8b700cecf0>
+         │                │      │    └ <HookCaller 'pytest_cmdline_main'>
+         │                │      └ <_pytest.config.compat.PathAwareHookProxy object at 0x7f8b700cf8c0>
+         │                └ <_pytest.config.Config object at 0x7f8b700cecf0>
+         └ <enum 'ExitCode'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           │    │         │    │     │    │                  │       └ True
+           │    │         │    │     │    │                  └ {'config': <_pytest.config.Config object at 0x7f8b700cecf0>}
+           │    │         │    │     │    └ <member '_hookimpls' of 'HookCaller' objects>
+           │    │         │    │     └ <HookCaller 'pytest_cmdline_main'>
+           │    │         │    └ <member 'name' of 'HookCaller' objects>
+           │    │         └ <HookCaller 'pytest_cmdline_main'>
+           │    └ <member '_hookexec' of 'HookCaller' objects>
+           └ <HookCaller 'pytest_cmdline_main'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           │    │               │          │        │       └ True
+           │    │               │          │        └ {'config': <_pytest.config.Config object at 0x7f8b700cecf0>}
+           │    │               │          └ [<HookImpl plugin_name='main', plugin=<module '_pytest.main' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_captio...
+           │    │               └ 'pytest_cmdline_main'
+           │    └ <function _multicall at 0x7f8b70aebcc0>
+           └ <_pytest.config.PytestPluginManager object at 0x7f8b700cd7f0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+          │         │         └ [<_pytest.config.Config object at 0x7f8b700cecf0>]
+          │         └ <member 'function' of 'HookImpl' objects>
+          └ <HookImpl plugin_name='main', plugin=<module '_pytest.main' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_caption...
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/main.py", line 365, in pytest_cmdline_main
+    return wrap_session(config, _main)
+           │            │       └ <function _main at 0x7f8b702816f0>
+           │            └ <_pytest.config.Config object at 0x7f8b700cecf0>
+           └ <function wrap_session at 0x7f8b70281430>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/main.py", line 318, in wrap_session
+    session.exitstatus = doit(config, session) or 0
+    │       │            │    │       └ <Session  exitstatus=<ExitCode.OK: 0> testsfailed=1 testscollected=10>
+    │       │            │    └ <_pytest.config.Config object at 0x7f8b700cecf0>
+    │       │            └ <function _main at 0x7f8b702816f0>
+    │       └ <ExitCode.OK: 0>
+    └ <Session  exitstatus=<ExitCode.OK: 0> testsfailed=1 testscollected=10>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/main.py", line 372, in _main
+    config.hook.pytest_runtestloop(session=session)
+    │      │    │                          └ <Session  exitstatus=<ExitCode.OK: 0> testsfailed=1 testscollected=10>
+    │      │    └ <HookCaller 'pytest_runtestloop'>
+    │      └ <_pytest.config.compat.PathAwareHookProxy object at 0x7f8b700cf8c0>
+    └ <_pytest.config.Config object at 0x7f8b700cecf0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           │    │         │    │     │    │                  │       └ True
+           │    │         │    │     │    │                  └ {'session': <Session  exitstatus=<ExitCode.OK: 0> testsfailed=1 testscollected=10>}
+           │    │         │    │     │    └ <member '_hookimpls' of 'HookCaller' objects>
+           │    │         │    │     └ <HookCaller 'pytest_runtestloop'>
+           │    │         │    └ <member 'name' of 'HookCaller' objects>
+           │    │         └ <HookCaller 'pytest_runtestloop'>
+           │    └ <member '_hookexec' of 'HookCaller' objects>
+           └ <HookCaller 'pytest_runtestloop'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           │    │               │          │        │       └ True
+           │    │               │          │        └ {'session': <Session  exitstatus=<ExitCode.OK: 0> testsfailed=1 testscollected=10>}
+           │    │               │          └ [<HookImpl plugin_name='main', plugin=<module '_pytest.main' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_captio...
+           │    │               └ 'pytest_runtestloop'
+           │    └ <function _multicall at 0x7f8b70aebcc0>
+           └ <_pytest.config.PytestPluginManager object at 0x7f8b700cd7f0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+          │         │         └ [<Session  exitstatus=<ExitCode.OK: 0> testsfailed=1 testscollected=10>]
+          │         └ <member 'function' of 'HookImpl' objects>
+          └ <HookImpl plugin_name='main', plugin=<module '_pytest.main' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_caption...
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/main.py", line 396, in pytest_runtestloop
+    item.config.hook.pytest_runtest_protocol(item=item, nextitem=nextitem)
+    │    │                                        │              └ <Function test_siliconflow_rerank_real_api>
+    │    │                                        └ <Function test_vlm_table_summarization>
+    │    └ <member 'config' of 'Node' objects>
+    └ <Function test_vlm_table_summarization>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           │    │         │    │     │    │                  │       └ True
+           │    │         │    │     │    │                  └ {'item': <Function test_vlm_table_summarization>, 'nextitem': <Function test_siliconflow_rerank_real_api>}
+           │    │         │    │     │    └ <member '_hookimpls' of 'HookCaller' objects>
+           │    │         │    │     └ <HookCaller 'pytest_runtest_protocol'>
+           │    │         │    └ <member 'name' of 'HookCaller' objects>
+           │    │         └ <HookCaller 'pytest_runtest_protocol'>
+           │    └ <member '_hookexec' of 'HookCaller' objects>
+           └ <HookCaller 'pytest_runtest_protocol'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           │    │               │          │        │       └ True
+           │    │               │          │        └ {'item': <Function test_vlm_table_summarization>, 'nextitem': <Function test_siliconflow_rerank_real_api>}
+           │    │               │          └ [<HookImpl plugin_name='runner', plugin=<module '_pytest.runner' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_ca...
+           │    │               └ 'pytest_runtest_protocol'
+           │    └ <function _multicall at 0x7f8b70aebcc0>
+           └ <_pytest.config.PytestPluginManager object at 0x7f8b700cd7f0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+          │         │         └ [<Function test_vlm_table_summarization>, <Function test_siliconflow_rerank_real_api>]
+          │         └ <member 'function' of 'HookImpl' objects>
+          └ <HookImpl plugin_name='runner', plugin=<module '_pytest.runner' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_cap...
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 118, in pytest_runtest_protocol
+    runtestprotocol(item, nextitem=nextitem)
+    │               │              └ <Function test_siliconflow_rerank_real_api>
+    │               └ <Function test_vlm_table_summarization>
+    └ <function runtestprotocol at 0x7f8b7027f530>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 137, in runtestprotocol
+    reports.append(call_and_report(item, "call", log))
+    │       │      │               │             └ True
+    │       │      │               └ <Function test_vlm_table_summarization>
+    │       │      └ <function call_and_report at 0x7f8b7027fed0>
+    │       └ <method 'append' of 'list' objects>
+    └ [<TestReport 'tests/test_processor.py::test_vlm_table_summarization' when='setup' outcome='passed'>]
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 244, in call_and_report
+    call = CallInfo.from_call(
+           │        └ <classmethod(<function CallInfo.from_call at 0x7f8b70280720>)>
+           └ <class '_pytest.runner.CallInfo'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 353, in from_call
+    result: TResult | None = func()
+            │                └ <function call_and_report.<locals>.<lambda> at 0x7f8b46416560>
+            └ +TResult
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 245, in <lambda>
+    lambda: runtest_hook(item=item, **kwds),
+            │                 │       └ {}
+            │                 └ <Function test_vlm_table_summarization>
+            └ <HookCaller 'pytest_runtest_call'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           │    │         │    │     │    │                  │       └ False
+           │    │         │    │     │    │                  └ {'item': <Function test_vlm_table_summarization>}
+           │    │         │    │     │    └ <member '_hookimpls' of 'HookCaller' objects>
+           │    │         │    │     └ <HookCaller 'pytest_runtest_call'>
+           │    │         │    └ <member 'name' of 'HookCaller' objects>
+           │    │         └ <HookCaller 'pytest_runtest_call'>
+           │    └ <member '_hookexec' of 'HookCaller' objects>
+           └ <HookCaller 'pytest_runtest_call'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           │    │               │          │        │       └ False
+           │    │               │          │        └ {'item': <Function test_vlm_table_summarization>}
+           │    │               │          └ [<HookImpl plugin_name='threadexception', plugin=<module '_pytest.threadexception' from '/home/runner/work/rag_enhanced_capti...
+           │    │               └ 'pytest_runtest_call'
+           │    └ <function _multicall at 0x7f8b70aebcc0>
+           └ <_pytest.config.PytestPluginManager object at 0x7f8b700cd7f0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+          │         │         └ [<Function test_vlm_table_summarization>]
+          │         └ <member 'function' of 'HookImpl' objects>
+          └ <HookImpl plugin_name='runner', plugin=<module '_pytest.runner' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_cap...
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 179, in pytest_runtest_call
+    item.runtest()
+    │    └ <function Function.runtest at 0x7f8b7014fd70>
+    └ <Function test_vlm_table_summarization>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/python.py", line 1720, in runtest
+    self.ihook.pytest_pyfunc_call(pyfuncitem=self)
+    │    │                                   └ <Function test_vlm_table_summarization>
+    │    └ <property object at 0x7f8b703b5490>
+    └ <Function test_vlm_table_summarization>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           │    │         │    │     │    │                  │       └ True
+           │    │         │    │     │    │                  └ {'pyfuncitem': <Function test_vlm_table_summarization>}
+           │    │         │    │     │    └ <member '_hookimpls' of 'HookCaller' objects>
+           │    │         │    │     └ <HookCaller 'pytest_pyfunc_call'>
+           │    │         │    └ <member 'name' of 'HookCaller' objects>
+           │    │         └ <HookCaller 'pytest_pyfunc_call'>
+           │    └ <member '_hookexec' of 'HookCaller' objects>
+           └ <HookCaller 'pytest_pyfunc_call'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           │    │               │          │        │       └ True
+           │    │               │          │        └ {'pyfuncitem': <Function test_vlm_table_summarization>}
+           │    │               │          └ [<HookImpl plugin_name='python', plugin=<module '_pytest.python' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_ca...
+           │    │               └ 'pytest_pyfunc_call'
+           │    └ <function _multicall at 0x7f8b70aebcc0>
+           └ <_pytest.config.PytestPluginManager object at 0x7f8b700cd7f0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+          │         │         └ [<Function test_vlm_table_summarization>]
+          │         └ <member 'function' of 'HookImpl' objects>
+          └ <HookImpl plugin_name='python', plugin=<module '_pytest.python' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_cap...
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/python.py", line 166, in pytest_pyfunc_call
+    result = testfunction(**testargs)
+             │              └ {}
+             └ <function test_vlm_table_summarization at 0x7f8b475666c0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/tests/test_processor.py", line 82, in test_vlm_table_summarization
+    asyncio.run(run_test())
+    │       │   └ <function test_vlm_table_summarization.<locals>.run_test at 0x7f8b46416400>
+    │       └ <function run at 0x7f8b6dcac720>
+    └ <module 'asyncio' from '/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/__init__.py'>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/runners.py", line 204, in run
+    return runner.run(main)
+           │      │   └ <coroutine object test_vlm_table_summarization.<locals>.run_test at 0x56293aa6a5d0>
+           │      └ <function Runner.run at 0x7f8b6dcacb40>
+           └ <asyncio.runners.Runner object at 0x7f8b4a806ad0>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/runners.py", line 127, in run
+    return self._loop.run_until_complete(task)
+           │    │     │                  └ <Task pending name='Task-5' coro=<test_vlm_table_summarization.<locals>.run_test() running at /home/runner/work/rag_enhanced_...
+           │    │     └ <function BaseEventLoop.run_until_complete at 0x7f8b6dca8e00>
+           │    └ <_UnixSelectorEventLoop running=True closed=False debug=False>
+           └ <asyncio.runners.Runner object at 0x7f8b4a806ad0>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/base_events.py", line 706, in run_until_complete
+    self.run_forever()
+    │    └ <function BaseEventLoop.run_forever at 0x7f8b6dca8d50>
+    └ <_UnixSelectorEventLoop running=True closed=False debug=False>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/base_events.py", line 677, in run_forever
+    self._run_once()
+    │    └ <function BaseEventLoop._run_once at 0x7f8b6dcaae50>
+    └ <_UnixSelectorEventLoop running=True closed=False debug=False>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/base_events.py", line 2057, in _run_once
+    handle._run()
+    │      └ <function Handle._run at 0x7f8b6d32aae0>
+    └ <Handle <_asyncio.TaskStepMethWrapper object at 0x7f8b477ca620>()>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/events.py", line 94, in _run
+    self._context.run(self._callback, *self._args)
+    │    │            │    │           │    └ <member '_args' of 'Handle' objects>
+    │    │            │    │           └ <Handle <_asyncio.TaskStepMethWrapper object at 0x7f8b477ca620>()>
+    │    │            │    └ <member '_callback' of 'Handle' objects>
+    │    │            └ <Handle <_asyncio.TaskStepMethWrapper object at 0x7f8b477ca620>()>
+    │    └ <member '_context' of 'Handle' objects>
+    └ <Handle <_asyncio.TaskStepMethWrapper object at 0x7f8b477ca620>()>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/src/rag_enhanced_caption/enhancer/processor.py", line 135, in _process_table_chunk
+    res = await self._analyze_element(user_prompt, prompts.TABLE_ANALYSIS_SYSTEM)
+                │    │                │            │       └ 'You are an expert data analyst and document parser. Your goal is to extract pure semantic meaning and business entities from...
+                │    │                │            └ <module 'rag_enhanced_caption.enhancer.prompts' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/src/rag_enh...
+                │    │                └ 'Please analyze this table.\n\nCRITICAL INSTRUCTION:\n1. Explain the core trends, structure, or key data points.\n2. Extract ...
+                │    └ <function MarkdownMultimodalProcessor._analyze_element at 0x7f8b6de62f00>
+                └ <rag_enhanced_caption.enhancer.processor.MarkdownMultimodalProcessor object at 0x7f8b47606d50>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/src/rag_enhanced_caption/enhancer/processor.py", line 84, in _analyze_element
+    raw_response = await self.vlm_func(user_prompt, system_prompt, image_base64, image_bytes)
+                         │    │        │            │              │             └ None
+                         │    │        │            │              └ None
+                         │    │        │            └ 'You are an expert data analyst and document parser. Your goal is to extract pure semantic meaning and business entities from...
+                         │    │        └ 'Please analyze this table.\n\nCRITICAL INSTRUCTION:\n1. Explain the core trends, structure, or key data points.\n2. Extract ...
+                         │    └ <function create_default_vlm_client.<locals>.configured_vlm_call at 0x7f8b46416770>
+                         └ <rag_enhanced_caption.enhancer.processor.MarkdownMultimodalProcessor object at 0x7f8b47606d50>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/src/rag_enhanced_caption/enhancer/vlm_client.py", line 100, in configured_vlm_call
+    return await default_vlm_call(
+                 └ <function default_vlm_call at 0x7f8b6de63690>
+> File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/src/rag_enhanced_caption/enhancer/vlm_client.py", line 83, in default_vlm_call
+    response = await client.post(endpoint, headers=headers, json=payload)
+                     │      │    │                 │             └ {'model': 'Qwen/Qwen3-VL-8B-Instruct', 'messages': [{'role': 'system', 'content': 'You are an expert data analyst and documen...
+                     │      │    │                 └ {'Authorization': '***', 'Content-Type': 'application/json'}
+                     │      │    └ 'https://api.siliconflow.cn/v1/chat/completions'
+                     │      └ <function AsyncClient.post at 0x7f8b6f144300>
+                     └ <httpx.AsyncClient object at 0x7f8b47607c50>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1859, in post
+    return await self.request(
+                 │    └ <function AsyncClient.request at 0x7f8b6f3bf530>
+                 └ <httpx.AsyncClient object at 0x7f8b47607c50>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+                 │    │    │             │                      └ <httpx._client.UseClientDefault object at 0x7f8b6f3057f0>
+                 │    │    │             └ <httpx._client.UseClientDefault object at 0x7f8b6f3057f0>
+                 │    │    └ <Request('POST', 'https://api.siliconflow.cn/v1/chat/completions')>
+                 │    └ <function AsyncClient.send at 0x7f8b6f3bf8a0>
+                 └ <httpx.AsyncClient object at 0x7f8b47607c50>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+                     │    └ <function AsyncClient._send_handling_auth at 0x7f8b6f3bfa00>
+                     └ <httpx.AsyncClient object at 0x7f8b47607c50>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+                     │    └ <function AsyncClient._send_handling_redirects at 0x7f8b6f3bfb60>
+                     └ <httpx.AsyncClient object at 0x7f8b47607c50>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+                     │    │                    └ <Request('POST', 'https://api.siliconflow.cn/v1/chat/completions')>
+                     │    └ <function AsyncClient._send_single_request at 0x7f8b6f3bfcc0>
+                     └ <httpx.AsyncClient object at 0x7f8b47607c50>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+                     │         │                    └ <Request('POST', 'https://api.siliconflow.cn/v1/chat/completions')>
+                     │         └ <function AsyncHTTPTransport.handle_async_request at 0x7f8b6f3c8ca0>
+                     └ <httpx.AsyncHTTPTransport object at 0x7f8b45238050>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+         └ <function map_httpcore_exceptions at 0x7f8b6f3f3690>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    │    │   │     └ ReadTimeout(TimeoutError())
+    │    │   └ <method 'throw' of 'generator' objects>
+    │    └ <generator object map_httpcore_exceptions at 0x7f8b47486540>
+    └ <contextlib._GeneratorContextManager object at 0x7f8b474a77e0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+          │          └ ''
+          └ <class 'httpx.ReadTimeout'>
+httpx.ReadTimeout
+2026-05-06 07:58:48.635 | ERROR    | rag_enhanced_caption.enhancer.processor:_analyze_element:93 - VLM analysis failed: 
+Traceback (most recent call last):
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+                 │    │     │                    └ <Request [b'POST']>
+                 │    │     └ <function AsyncConnectionPool.handle_async_request at 0x7f8b47483c10>
+                 │    └ <AsyncConnectionPool [Requests: 0 active, 0 queued | Connections: 0 active, 0 idle]>
+                 └ <httpx.AsyncHTTPTransport object at 0x7f8b45238050>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+                     │          └ <function AsyncHTTPConnection.handle_async_request at 0x7f8b47482090>
+                     └ <AsyncHTTPConnection ['https://api.siliconflow.cn:443', HTTP/1.1, CLOSED, Request Count: 1]>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_async/connection.py", line 103, in handle_async_request
+    return await self._connection.handle_async_request(request)
+                 │    │           │                    └ <Request [b'POST']>
+                 │    │           └ <function AsyncHTTP11Connection.handle_async_request at 0x7f8b47457950>
+                 │    └ <AsyncHTTP11Connection ['https://api.siliconflow.cn:443', CLOSED, Request Count: 1]>
+                 └ <AsyncHTTPConnection ['https://api.siliconflow.cn:443', HTTP/1.1, CLOSED, Request Count: 1]>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_async/http11.py", line 136, in handle_async_request
+    raise exc
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_async/http11.py", line 106, in handle_async_request
+    ) = await self._receive_response_headers(**kwargs)
+              │    │                           └ {'request': <Request [b'POST']>}
+              │    └ <function AsyncHTTP11Connection._receive_response_headers at 0x7f8b47457ed0>
+              └ <AsyncHTTP11Connection ['https://api.siliconflow.cn:443', CLOSED, Request Count: 1]>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_async/http11.py", line 177, in _receive_response_headers
+    event = await self._receive_event(timeout=timeout)
+                  │    │                      └ 60.0
+                  │    └ <function AsyncHTTP11Connection._receive_event at 0x7f8b47480250>
+                  └ <AsyncHTTP11Connection ['https://api.siliconflow.cn:443', CLOSED, Request Count: 1]>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_async/http11.py", line 217, in _receive_event
+    data = await self._network_stream.read(
+                 │    │               └ <function AnyIOStream.read at 0x7f8b474b5430>
+                 │    └ <httpcore._backends.anyio.AnyIOStream object at 0x7f8b47602ea0>
+                 └ <AsyncHTTP11Connection ['https://api.siliconflow.cn:443', CLOSED, Request Count: 1]>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_backends/anyio.py", line 32, in read
+    with map_exceptions(exc_map):
+         │              └ {<class 'TimeoutError'>: <class 'httpcore.ReadTimeout'>, <class 'anyio.BrokenResourceError'>: <class 'httpcore.ReadError'>, <...
+         └ <function map_exceptions at 0x7f8b475da560>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    │    │   │     └ TimeoutError()
+    │    │   └ <method 'throw' of 'generator' objects>
+    │    └ <generator object map_exceptions at 0x7f8b47487240>
+    └ <contextlib._GeneratorContextManager object at 0x7f8b474a7c40>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpcore/_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+          └ <class 'httpcore.ReadTimeout'>
+httpcore.ReadTimeout
+The above exception was the direct cause of the following exception:
+Traceback (most recent call last):
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/bin/pytest", line 10, in <module>
+    sys.exit(console_main())
+    │   │    └ <function console_main at 0x7f8b703277f0>
+    │   └ <built-in function exit>
+    └ <module 'sys' (built-in)>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/config/__init__.py", line 223, in console_main
+    code = main()
+           └ <function main at 0x7f8b70327690>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/config/__init__.py", line 199, in main
+    ret: ExitCode | int = config.hook.pytest_cmdline_main(config=config)
+         │                │      │    │                          └ <_pytest.config.Config object at 0x7f8b700cecf0>
+         │                │      │    └ <HookCaller 'pytest_cmdline_main'>
+         │                │      └ <_pytest.config.compat.PathAwareHookProxy object at 0x7f8b700cf8c0>
+         │                └ <_pytest.config.Config object at 0x7f8b700cecf0>
+         └ <enum 'ExitCode'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           │    │         │    │     │    │                  │       └ True
+           │    │         │    │     │    │                  └ {'config': <_pytest.config.Config object at 0x7f8b700cecf0>}
+           │    │         │    │     │    └ <member '_hookimpls' of 'HookCaller' objects>
+           │    │         │    │     └ <HookCaller 'pytest_cmdline_main'>
+           │    │         │    └ <member 'name' of 'HookCaller' objects>
+           │    │         └ <HookCaller 'pytest_cmdline_main'>
+           │    └ <member '_hookexec' of 'HookCaller' objects>
+           └ <HookCaller 'pytest_cmdline_main'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           │    │               │          │        │       └ True
+           │    │               │          │        └ {'config': <_pytest.config.Config object at 0x7f8b700cecf0>}
+           │    │               │          └ [<HookImpl plugin_name='main', plugin=<module '_pytest.main' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_captio...
+           │    │               └ 'pytest_cmdline_main'
+           │    └ <function _multicall at 0x7f8b70aebcc0>
+           └ <_pytest.config.PytestPluginManager object at 0x7f8b700cd7f0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+          │         │         └ [<_pytest.config.Config object at 0x7f8b700cecf0>]
+          │         └ <member 'function' of 'HookImpl' objects>
+          └ <HookImpl plugin_name='main', plugin=<module '_pytest.main' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_caption...
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/main.py", line 365, in pytest_cmdline_main
+    return wrap_session(config, _main)
+           │            │       └ <function _main at 0x7f8b702816f0>
+           │            └ <_pytest.config.Config object at 0x7f8b700cecf0>
+           └ <function wrap_session at 0x7f8b70281430>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/main.py", line 318, in wrap_session
+    session.exitstatus = doit(config, session) or 0
+    │       │            │    │       └ <Session  exitstatus=<ExitCode.OK: 0> testsfailed=1 testscollected=10>
+    │       │            │    └ <_pytest.config.Config object at 0x7f8b700cecf0>
+    │       │            └ <function _main at 0x7f8b702816f0>
+    │       └ <ExitCode.OK: 0>
+    └ <Session  exitstatus=<ExitCode.OK: 0> testsfailed=1 testscollected=10>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/main.py", line 372, in _main
+    config.hook.pytest_runtestloop(session=session)
+    │      │    │                          └ <Session  exitstatus=<ExitCode.OK: 0> testsfailed=1 testscollected=10>
+    │      │    └ <HookCaller 'pytest_runtestloop'>
+    │      └ <_pytest.config.compat.PathAwareHookProxy object at 0x7f8b700cf8c0>
+    └ <_pytest.config.Config object at 0x7f8b700cecf0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           │    │         │    │     │    │                  │       └ True
+           │    │         │    │     │    │                  └ {'session': <Session  exitstatus=<ExitCode.OK: 0> testsfailed=1 testscollected=10>}
+           │    │         │    │     │    └ <member '_hookimpls' of 'HookCaller' objects>
+           │    │         │    │     └ <HookCaller 'pytest_runtestloop'>
+           │    │         │    └ <member 'name' of 'HookCaller' objects>
+           │    │         └ <HookCaller 'pytest_runtestloop'>
+           │    └ <member '_hookexec' of 'HookCaller' objects>
+           └ <HookCaller 'pytest_runtestloop'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           │    │               │          │        │       └ True
+           │    │               │          │        └ {'session': <Session  exitstatus=<ExitCode.OK: 0> testsfailed=1 testscollected=10>}
+           │    │               │          └ [<HookImpl plugin_name='main', plugin=<module '_pytest.main' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_captio...
+           │    │               └ 'pytest_runtestloop'
+           │    └ <function _multicall at 0x7f8b70aebcc0>
+           └ <_pytest.config.PytestPluginManager object at 0x7f8b700cd7f0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+          │         │         └ [<Session  exitstatus=<ExitCode.OK: 0> testsfailed=1 testscollected=10>]
+          │         └ <member 'function' of 'HookImpl' objects>
+          └ <HookImpl plugin_name='main', plugin=<module '_pytest.main' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_caption...
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/main.py", line 396, in pytest_runtestloop
+    item.config.hook.pytest_runtest_protocol(item=item, nextitem=nextitem)
+    │    │                                        │              └ <Function test_siliconflow_rerank_real_api>
+    │    │                                        └ <Function test_vlm_table_summarization>
+    │    └ <member 'config' of 'Node' objects>
+    └ <Function test_vlm_table_summarization>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           │    │         │    │     │    │                  │       └ True
+           │    │         │    │     │    │                  └ {'item': <Function test_vlm_table_summarization>, 'nextitem': <Function test_siliconflow_rerank_real_api>}
+           │    │         │    │     │    └ <member '_hookimpls' of 'HookCaller' objects>
+           │    │         │    │     └ <HookCaller 'pytest_runtest_protocol'>
+           │    │         │    └ <member 'name' of 'HookCaller' objects>
+           │    │         └ <HookCaller 'pytest_runtest_protocol'>
+           │    └ <member '_hookexec' of 'HookCaller' objects>
+           └ <HookCaller 'pytest_runtest_protocol'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           │    │               │          │        │       └ True
+           │    │               │          │        └ {'item': <Function test_vlm_table_summarization>, 'nextitem': <Function test_siliconflow_rerank_real_api>}
+           │    │               │          └ [<HookImpl plugin_name='runner', plugin=<module '_pytest.runner' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_ca...
+           │    │               └ 'pytest_runtest_protocol'
+           │    └ <function _multicall at 0x7f8b70aebcc0>
+           └ <_pytest.config.PytestPluginManager object at 0x7f8b700cd7f0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+          │         │         └ [<Function test_vlm_table_summarization>, <Function test_siliconflow_rerank_real_api>]
+          │         └ <member 'function' of 'HookImpl' objects>
+          └ <HookImpl plugin_name='runner', plugin=<module '_pytest.runner' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_cap...
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 118, in pytest_runtest_protocol
+    runtestprotocol(item, nextitem=nextitem)
+    │               │              └ <Function test_siliconflow_rerank_real_api>
+    │               └ <Function test_vlm_table_summarization>
+    └ <function runtestprotocol at 0x7f8b7027f530>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 137, in runtestprotocol
+    reports.append(call_and_report(item, "call", log))
+    │       │      │               │             └ True
+    │       │      │               └ <Function test_vlm_table_summarization>
+    │       │      └ <function call_and_report at 0x7f8b7027fed0>
+    │       └ <method 'append' of 'list' objects>
+    └ [<TestReport 'tests/test_processor.py::test_vlm_table_summarization' when='setup' outcome='passed'>]
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 244, in call_and_report
+    call = CallInfo.from_call(
+           │        └ <classmethod(<function CallInfo.from_call at 0x7f8b70280720>)>
+           └ <class '_pytest.runner.CallInfo'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 353, in from_call
+    result: TResult | None = func()
+            │                └ <function call_and_report.<locals>.<lambda> at 0x7f8b46416560>
+            └ +TResult
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 245, in <lambda>
+    lambda: runtest_hook(item=item, **kwds),
+            │                 │       └ {}
+            │                 └ <Function test_vlm_table_summarization>
+            └ <HookCaller 'pytest_runtest_call'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           │    │         │    │     │    │                  │       └ False
+           │    │         │    │     │    │                  └ {'item': <Function test_vlm_table_summarization>}
+           │    │         │    │     │    └ <member '_hookimpls' of 'HookCaller' objects>
+           │    │         │    │     └ <HookCaller 'pytest_runtest_call'>
+           │    │         │    └ <member 'name' of 'HookCaller' objects>
+           │    │         └ <HookCaller 'pytest_runtest_call'>
+           │    └ <member '_hookexec' of 'HookCaller' objects>
+           └ <HookCaller 'pytest_runtest_call'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           │    │               │          │        │       └ False
+           │    │               │          │        └ {'item': <Function test_vlm_table_summarization>}
+           │    │               │          └ [<HookImpl plugin_name='threadexception', plugin=<module '_pytest.threadexception' from '/home/runner/work/rag_enhanced_capti...
+           │    │               └ 'pytest_runtest_call'
+           │    └ <function _multicall at 0x7f8b70aebcc0>
+           └ <_pytest.config.PytestPluginManager object at 0x7f8b700cd7f0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+          │         │         └ [<Function test_vlm_table_summarization>]
+          │         └ <member 'function' of 'HookImpl' objects>
+          └ <HookImpl plugin_name='runner', plugin=<module '_pytest.runner' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_cap...
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 179, in pytest_runtest_call
+    item.runtest()
+    │    └ <function Function.runtest at 0x7f8b7014fd70>
+    └ <Function test_vlm_table_summarization>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/python.py", line 1720, in runtest
+    self.ihook.pytest_pyfunc_call(pyfuncitem=self)
+    │    │                                   └ <Function test_vlm_table_summarization>
+    │    └ <property object at 0x7f8b703b5490>
+    └ <Function test_vlm_table_summarization>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+           │    │         │    │     │    │                  │       └ True
+           │    │         │    │     │    │                  └ {'pyfuncitem': <Function test_vlm_table_summarization>}
+           │    │         │    │     │    └ <member '_hookimpls' of 'HookCaller' objects>
+           │    │         │    │     └ <HookCaller 'pytest_pyfunc_call'>
+           │    │         │    └ <member 'name' of 'HookCaller' objects>
+           │    │         └ <HookCaller 'pytest_pyfunc_call'>
+           │    └ <member '_hookexec' of 'HookCaller' objects>
+           └ <HookCaller 'pytest_pyfunc_call'>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+           │    │               │          │        │       └ True
+           │    │               │          │        └ {'pyfuncitem': <Function test_vlm_table_summarization>}
+           │    │               │          └ [<HookImpl plugin_name='python', plugin=<module '_pytest.python' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_ca...
+           │    │               └ 'pytest_pyfunc_call'
+           │    └ <function _multicall at 0x7f8b70aebcc0>
+           └ <_pytest.config.PytestPluginManager object at 0x7f8b700cd7f0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+          │         │         └ [<Function test_vlm_table_summarization>]
+          │         └ <member 'function' of 'HookImpl' objects>
+          └ <HookImpl plugin_name='python', plugin=<module '_pytest.python' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_cap...
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/_pytest/python.py", line 166, in pytest_pyfunc_call
+    result = testfunction(**testargs)
+             │              └ {}
+             └ <function test_vlm_table_summarization at 0x7f8b475666c0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/tests/test_processor.py", line 82, in test_vlm_table_summarization
+    asyncio.run(run_test())
+    │       │   └ <function test_vlm_table_summarization.<locals>.run_test at 0x7f8b46416400>
+    │       └ <function run at 0x7f8b6dcac720>
+    └ <module 'asyncio' from '/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/__init__.py'>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/runners.py", line 204, in run
+    return runner.run(main)
+           │      │   └ <coroutine object test_vlm_table_summarization.<locals>.run_test at 0x56293aa6a5d0>
+           │      └ <function Runner.run at 0x7f8b6dcacb40>
+           └ <asyncio.runners.Runner object at 0x7f8b4a806ad0>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/runners.py", line 127, in run
+    return self._loop.run_until_complete(task)
+           │    │     │                  └ <Task pending name='Task-5' coro=<test_vlm_table_summarization.<locals>.run_test() running at /home/runner/work/rag_enhanced_...
+           │    │     └ <function BaseEventLoop.run_until_complete at 0x7f8b6dca8e00>
+           │    └ <_UnixSelectorEventLoop running=True closed=False debug=False>
+           └ <asyncio.runners.Runner object at 0x7f8b4a806ad0>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/base_events.py", line 706, in run_until_complete
+    self.run_forever()
+    │    └ <function BaseEventLoop.run_forever at 0x7f8b6dca8d50>
+    └ <_UnixSelectorEventLoop running=True closed=False debug=False>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/base_events.py", line 677, in run_forever
+    self._run_once()
+    │    └ <function BaseEventLoop._run_once at 0x7f8b6dcaae50>
+    └ <_UnixSelectorEventLoop running=True closed=False debug=False>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/base_events.py", line 2057, in _run_once
+    handle._run()
+    │      └ <function Handle._run at 0x7f8b6d32aae0>
+    └ <Handle <_asyncio.TaskStepMethWrapper object at 0x7f8b477ca620>()>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/asyncio/events.py", line 94, in _run
+    self._context.run(self._callback, *self._args)
+    │    │            │    │           │    └ <member '_args' of 'Handle' objects>
+    │    │            │    │           └ <Handle <_asyncio.TaskStepMethWrapper object at 0x7f8b477ca620>()>
+    │    │            │    └ <member '_callback' of 'Handle' objects>
+    │    │            └ <Handle <_asyncio.TaskStepMethWrapper object at 0x7f8b477ca620>()>
+    │    └ <member '_context' of 'Handle' objects>
+    └ <Handle <_asyncio.TaskStepMethWrapper object at 0x7f8b477ca620>()>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/src/rag_enhanced_caption/enhancer/processor.py", line 135, in _process_table_chunk
+    res = await self._analyze_element(user_prompt, prompts.TABLE_ANALYSIS_SYSTEM)
+                │    │                │            │       └ 'You are an expert data analyst and document parser. Your goal is to extract pure semantic meaning and business entities from...
+                │    │                │            └ <module 'rag_enhanced_caption.enhancer.prompts' from '/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/src/rag_enh...
+                │    │                └ 'Please analyze this table.\n\nCRITICAL INSTRUCTION:\n1. Explain the core trends, structure, or key data points.\n2. Extract ...
+                │    └ <function MarkdownMultimodalProcessor._analyze_element at 0x7f8b6de62f00>
+                └ <rag_enhanced_caption.enhancer.processor.MarkdownMultimodalProcessor object at 0x7f8b47606d50>
+> File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/src/rag_enhanced_caption/enhancer/processor.py", line 84, in _analyze_element
+    raw_response = await self.vlm_func(user_prompt, system_prompt, image_base64, image_bytes)
+                         │    │        │            │              │             └ None
+                         │    │        │            │              └ None
+                         │    │        │            └ 'You are an expert data analyst and document parser. Your goal is to extract pure semantic meaning and business entities from...
+                         │    │        └ 'Please analyze this table.\n\nCRITICAL INSTRUCTION:\n1. Explain the core trends, structure, or key data points.\n2. Extract ...
+                         │    └ <function create_default_vlm_client.<locals>.configured_vlm_call at 0x7f8b46416770>
+                         └ <rag_enhanced_caption.enhancer.processor.MarkdownMultimodalProcessor object at 0x7f8b47606d50>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/src/rag_enhanced_caption/enhancer/vlm_client.py", line 100, in configured_vlm_call
+    return await default_vlm_call(
+                 └ <function default_vlm_call at 0x7f8b6de63690>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/src/rag_enhanced_caption/enhancer/vlm_client.py", line 83, in default_vlm_call
+    response = await client.post(endpoint, headers=headers, json=payload)
+                     │      │    │                 │             └ {'model': 'Qwen/Qwen3-VL-8B-Instruct', 'messages': [{'role': 'system', 'content': 'You are an expert data analyst and documen...
+                     │      │    │                 └ {'Authorization': '***', 'Content-Type': 'application/json'}
+                     │      │    └ 'https://api.siliconflow.cn/v1/chat/completions'
+                     │      └ <function AsyncClient.post at 0x7f8b6f144300>
+                     └ <httpx.AsyncClient object at 0x7f8b47607c50>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1859, in post
+    return await self.request(
+                 │    └ <function AsyncClient.request at 0x7f8b6f3bf530>
+                 └ <httpx.AsyncClient object at 0x7f8b47607c50>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+                 │    │    │             │                      └ <httpx._client.UseClientDefault object at 0x7f8b6f3057f0>
+                 │    │    │             └ <httpx._client.UseClientDefault object at 0x7f8b6f3057f0>
+                 │    │    └ <Request('POST', 'https://api.siliconflow.cn/v1/chat/completions')>
+                 │    └ <function AsyncClient.send at 0x7f8b6f3bf8a0>
+                 └ <httpx.AsyncClient object at 0x7f8b47607c50>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+                     │    └ <function AsyncClient._send_handling_auth at 0x7f8b6f3bfa00>
+                     └ <httpx.AsyncClient object at 0x7f8b47607c50>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+                     │    └ <function AsyncClient._send_handling_redirects at 0x7f8b6f3bfb60>
+                     └ <httpx.AsyncClient object at 0x7f8b47607c50>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+                     │    │                    └ <Request('POST', 'https://api.siliconflow.cn/v1/chat/completions')>
+                     │    └ <function AsyncClient._send_single_request at 0x7f8b6f3bfcc0>
+                     └ <httpx.AsyncClient object at 0x7f8b47607c50>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+                     │         │                    └ <Request('POST', 'https://api.siliconflow.cn/v1/chat/completions')>
+                     │         └ <function AsyncHTTPTransport.handle_async_request at 0x7f8b6f3c8ca0>
+                     └ <httpx.AsyncHTTPTransport object at 0x7f8b45238050>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+         └ <function map_httpcore_exceptions at 0x7f8b6f3f3690>
+  File "/opt/hostedtoolcache/Python/3.14.4/x64/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    │    │   │     └ ReadTimeout(TimeoutError())
+    │    │   └ <method 'throw' of 'generator' objects>
+    │    └ <generator object map_httpcore_exceptions at 0x7f8b47486540>
+    └ <contextlib._GeneratorContextManager object at 0x7f8b474a77e0>
+  File "/home/runner/work/rag_enhanced_caption/rag_enhanced_caption/.venv/lib/python3.14/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+          │          └ ''
+          └ <class 'httpx.ReadTimeout'>
+httpx.ReadTimeout
+=========================== short test summary info ============================
+FAILED tests/test_html_table.py::test_html_table_parsing_and_enrichment - AssertionError: VLM failed to extract entities from HTML table
+assert 0 > 0
+ +  where 0 = len([])
+FAILED tests/test_processor.py::test_vlm_table_summarization - AssertionError: VLM failed to extract any entities
+assert 0 > 0
+ +  where 0 = len([])
+=================== 2 failed, 8 passed in 196.50s (0:03:16) ====================
+Error: Process completed with exit code 1.

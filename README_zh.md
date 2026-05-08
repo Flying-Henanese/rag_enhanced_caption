@@ -85,6 +85,22 @@ graph TD
 
 ### 安装
 
+#### 方式 A：作为第三方库安装（推荐用于其他项目）
+你可以直接从 GitHub 安装，或者在本地以可编辑模式安装：
+
+```bash
+# 直接从 GitHub 安装最新代码
+pip install git+https://github.com/Flying-Henanese/rag_enhanced_caption.git
+
+# 或者克隆并本地安装
+git clone https://github.com/Flying-Henanese/rag_enhanced_caption.git
+cd rag_enhanced_caption
+pip install .
+```
+
+#### 方式 B：用于本地开发
+使用 `uv` 快速搭建开发环境：
+
 ```bash
 # 克隆仓库
 git clone https://github.com/Flying-Henanese/rag_enhanced_caption.git
@@ -92,27 +108,44 @@ cd rag_enhanced_caption
 
 # 使用 uv 安装依赖
 uv sync
-uv sync --extra local # 可选：如果需要本地 Embedding 模型支持
-uv sync --extra demo  # 可选：用于运行 FastAPI 后端和高级 LlamaIndex 演示
 ```
 
 ### ⚙️ 环境配置
-在项目根目录下创建一个 `.env` 文件：
+在你的运行目录（或项目根目录）创建一个 `.env` 文件：
 ```env
 VLM_API_KEY=your_key_here
 VLM_ENDPOINT=https://api.siliconflow.cn/v1/chat/completions
-VLM_MODEL_NAME=Qwen/Qwen3-VL-8B-Instruct
-# 如果配置了结合远程 Embedding 的语义分块：
-EMBEDDING_API_KEY=your_key_here
-EMBEDDING_ENDPOINT=https://api.siliconflow.cn/v1/embeddings
-EMBEDDING_MODEL_NAME=BAAI/bge-m3
-# 如果配置了结合远程 Rerank 模型的精排：
-RERANK_API_KEY=your_key_here
-RERANK_ENDPOINT=https://api.siliconflow.cn/v1/rerank
-RERANK_MODEL_NAME=Pro/BAAI/bge-reranker-v2-m3
+VLM_MODEL_NAME=Qwen/Qwen2.5-VL-72B-Instruct  # 推荐使用
+# ... 其他可选配置
 ```
 
-### 1. 核心：“四级火箭”高级检索引擎
+### 1. 使用命令行工具 (CLI)
+安装完成后，你可以在任何地方直接使用 `rag-caption` 命令：
+
+```bash
+# 处理 Markdown 文件并将结果输出到指定目录
+rag-caption ./input.md ./output_dir
+```
+
+### 2. 作为 Python 库调用
+```python
+from rag_enhanced_caption import MarkdownMultimodalProcessor, create_default_vlm_client
+
+async def main():
+    # 创建 VLM 客户端
+    vlm_client = create_default_vlm_client()
+    # 初始化处理器
+    processor = MarkdownMultimodalProcessor(vlm_func=vlm_client)
+    
+    # 增强 Markdown 内容
+    enriched_md = await processor.enrich_markdown(
+        md_content="# 我的文档...",
+        base_dir="./images"
+    )
+    print(enriched_md)
+```
+
+### 3. 核心：“四级火箭”高级检索引擎
 
 正因为本工具包输出的数据极其干净规范，你可以以此构建企业级的高阶检索流水线。我们在 `examples/llama_index_advanced_rag.py` 中提供了一个极佳的范例。
 
@@ -156,17 +189,17 @@ uv run python backend/main.py
 
 ```text
 rag_enhanced_caption/
-├── cli.py                           # 命令行界面 (主入口)
+├── src/
+│   └── rag_enhanced_caption/        # 顶层包目录
+│       ├── cli.py                   # 命令行界面 (主入口)
+│       ├── chunker/                 # AST 感知的语义分块模块
+│       └── enhancer/                # 视觉到文本的多模态增强模块
 ├── examples/                        # 演示脚本与评估工具
 │   ├── data_ingestion_pipeline.py   # 多向量 RAG 数据生产流水线
 │   └── llama_index_advanced_rag.py  # 4 级火箭高级检索策略演示
 ├── backend/
 │   ├── main.py                      # FastAPI Web 后端
 │   └── rag_pipeline.py              # 高级 LlamaIndex 封装与核心驱动
-├── src/
-│   └── rag_enhanced_caption/        # 顶层包目录
-│       ├── chunker/                 # AST 感知的语义分块模块
-│       └── enhancer/                # 视觉到文本的多模态增强模块
 └── tests/                           # 统一的单元与集成测试套件
 ```
 

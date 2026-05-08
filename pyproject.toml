@@ -49,6 +49,9 @@ Homepage = "https://github.com/Flying-Henanese/rag_enhanced_caption"
 Repository = "https://github.com/Flying-Henanese/rag_enhanced_caption.git"
 Issues = "https://github.com/Flying-Henanese/rag_enhanced_caption/issues"
 
+[project.scripts]
+rag-caption = "rag_enhanced_caption.cli:main"
+
 [project.optional-dependencies]
 # local = [
 #     "numpy>=2.2.6",

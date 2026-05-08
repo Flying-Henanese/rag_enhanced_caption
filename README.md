@@ -85,34 +85,62 @@ graph TD
 
 ### Installation
 
+#### As a Library (Recommended for other projects)
+You can install this toolkit directly from GitHub or as a local editable package:
+
 ```bash
-# Clone the repository
+# Install from GitHub
+pip install git+https://github.com/Flying-Henanese/rag_enhanced_caption.git
+
+# Or install from local source
 git clone https://github.com/Flying-Henanese/rag_enhanced_caption.git
 cd rag_enhanced_caption
+pip install .
+```
 
-# Install dependencies using uv
+#### For Development
+Use `uv` for a streamlined development environment:
+
+```bash
+# Clone and setup
+git clone https://github.com/Flying-Henanese/rag_enhanced_caption.git
+cd rag_enhanced_caption
 uv sync
-uv sync --extra local # Optional: for local embedding support
-uv sync --extra demo  # Optional: to run FastAPI and advanced LlamaIndex demos
 ```
 
 ### ⚙️ Configuration
-Create a `.env` file in the root directory:
+Create a `.env` file in your working directory (or the project root):
 ```env
 VLM_API_KEY=your_key_here
 VLM_ENDPOINT=https://api.siliconflow.cn/v1/chat/completions
-VLM_MODEL_NAME=Qwen/Qwen3-VL-8B-Instruct
-# If using semantic chunking with remote embeddings:
-EMBEDDING_API_KEY=your_key_here
-EMBEDDING_ENDPOINT=https://api.siliconflow.cn/v1/embeddings
-EMBEDDING_MODEL_NAME=BAAI/bge-m3
-# If using a remote Rerank model for post-processing:
-RERANK_API_KEY=your_key_here
-RERANK_ENDPOINT=https://api.siliconflow.cn/v1/rerank
-RERANK_MODEL_NAME=Pro/BAAI/bge-reranker-v2-m3
+VLM_MODEL_NAME=Qwen/Qwen2.5-VL-72B-Instruct  # Recommended
+# ... other optional keys
 ```
 
-### 1. The Core 4-Stage "Rocket" Retrieval Engine
+### 1. Using the CLI
+After installation, you can use the `rag-caption` command globally:
+
+```bash
+# Process a markdown file and output to a directory
+rag-caption ./input.md ./output_dir
+```
+
+### 2. Using as a Python Library
+```python
+from rag_enhanced_caption import MarkdownMultimodalProcessor, create_default_vlm_client
+
+async def main():
+    vlm_client = create_default_vlm_client()
+    processor = MarkdownMultimodalProcessor(vlm_func=vlm_client)
+    
+    enriched_md = await processor.enrich_markdown(
+        md_content="# My Document...",
+        base_dir="./images"
+    )
+    print(enriched_md)
+```
+
+### 3. Advanced RAG with LlamaIndex
 
 Because this toolkit outputs extremely clean data, you can build enterprise-grade retrieval pipelines. We provide an excellent example in `examples/llama_index_advanced_rag.py`.
 
@@ -156,17 +184,17 @@ We have performed extensive comparative tests using complex technical documents 
 
 ```text
 rag_enhanced_caption/
-├── cli.py                           # Command Line Interface (Main Entry)
+├── src/
+│   └── rag_enhanced_caption/        # Top-level package
+│       ├── cli.py                   # Command Line Interface (Main Entry)
+│       ├── chunker/                 # AST-Aware Semantic Chunking
+│       └── enhancer/                # VLM Enrichment
 ├── examples/                        # Demonstrations & Evaluation Scripts
 │   ├── data_ingestion_pipeline.py   # Multi-Vector Data Ingestion
 │   └── llama_index_advanced_rag.py  # 4-Stage Advanced Retrieval Engine
 ├── backend/
 │   ├── main.py                      # FastAPI Web Server
 │   └── rag_pipeline.py              # Advanced LlamaIndex wrapper module
-├── src/
-│   └── rag_enhanced_caption/        # Top-level package
-│       ├── chunker/                 # AST-Aware Semantic Chunking
-│       └── enhancer/                # VLM Enrichment
 └── tests/                           # Unified test suite
 ```
 

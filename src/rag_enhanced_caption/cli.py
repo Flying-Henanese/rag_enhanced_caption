@@ -13,16 +13,9 @@ from dotenv import load_dotenv
 from loguru import logger
 
 # --- 环境配置 ---
-root_dir = Path(__file__).resolve().parent
-env_path = root_dir / ".env"
-
-if env_path.exists():
-    load_dotenv(dotenv_path=env_path)
-    logger.info(f"Loaded configuration from: {env_path}")
-else:
-    logger.warning(f"No .env file found at {env_path}, relying on system environment variables.")
-
-sys.path.insert(0, str(root_dir / "src"))
+# 优先加载当前运行目录下的 .env，其次加载脚本所在目录的 .env
+load_dotenv(dotenv_path=Path.cwd() / ".env")
+load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env")
 
 from rag_enhanced_caption.enhancer.processor import MarkdownMultimodalProcessor
 from rag_enhanced_caption.enhancer.vlm_client import create_default_vlm_client
