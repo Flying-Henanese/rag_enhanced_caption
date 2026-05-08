@@ -1,7 +1,6 @@
 """
 测试模块：验证 Semantic Parser 针对特定 Bug 的修复（嵌套列表重复、HTML Block 上下文断裂）。
 """
-import pytest
 from rag_enhanced_caption.chunker.parsers import semantic
 
 def test_nested_list_duplication_fix():

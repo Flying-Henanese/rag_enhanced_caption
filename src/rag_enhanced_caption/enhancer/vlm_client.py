@@ -94,7 +94,7 @@ async def default_vlm_call(
             
             result = response.json()
             return result["choices"][0]["message"]["content"]
-    except httpx.HTTPStatusError as e:
+    except httpx.HTTPStatusError:
         # 已经在上面处理并抛出了带详细信息的异常
         raise
     except Exception as e:

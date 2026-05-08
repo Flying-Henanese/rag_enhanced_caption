@@ -2,7 +2,6 @@ import argparse
 import asyncio
 import hashlib
 import json
-import os
 import re
 import sys
 import time
@@ -190,7 +189,7 @@ async def process_document(file_path: Path, output_dir: Path):
                 f_doc.write(json.dumps(child, ensure_ascii=False) + "\n")
 
     logger.info(f"Workflow complete! Files saved to: {output_dir}")
-    logger.info(f"Generated:")
+    logger.info("Generated:")
     logger.info(f"  - {enhanced_md_path.name}")
     logger.info(f"  - {index_path.name}")
     logger.info(f"  - {docstore_path.name}")

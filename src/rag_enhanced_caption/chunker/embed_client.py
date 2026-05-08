@@ -31,7 +31,7 @@ def get_remote_embedding_client(
 
     # 逻辑：如果使用默认云端服务则强制要求 API KEY；如果是自定义 Endpoint 则允许匿名访问
     if not api_key and endpoint == default_endpoint:
-        logger.warning(f"未配置 EMBEDDING_API_KEY，且正在使用默认服务地址。客户端将不会初始化。")
+        logger.warning("未配置 EMBEDDING_API_KEY，且正在使用默认服务地址。客户端将不会初始化。")
         return None
 
     def embed_fn(texts: List[str]) -> List[List[float]]:

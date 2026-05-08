@@ -7,10 +7,6 @@
 """
 import pytest
 import asyncio
-import os
-import sys
-from pathlib import Path
-from loguru import logger
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -60,17 +56,17 @@ End of document.
         
         summary = html_chunk["text_for_embedding"]
         
-        print(f"\n=======================================================")
-        print(f"🤖 [VLM HTML Table Summary Check]")
-        print(f"=======================================================")
+        print("\n=======================================================")
+        print("🤖 [VLM HTML Table Summary Check]")
+        print("=======================================================")
         print(f"Raw HTML Table Data:\n{html_chunk['full_content']}")
-        print(f"-------------------------------------------------------")
+        print("-------------------------------------------------------")
         print(f"VLM Generated Summary (Used for Vector Search):\n{summary}")
         
         entities = html_chunk["metadata"].get("entities", [])
-        print(f"-------------------------------------------------------")
+        print("-------------------------------------------------------")
         print(f"VLM Extracted Entities:\n{entities}")
-        print(f"=======================================================\n")
+        print("=======================================================\n")
         
         assert "{" not in summary and "}" not in summary, "VLM failed to parse JSON properly and leaked syntax"
         assert len(entities) > 0, "VLM failed to extract entities from HTML table"

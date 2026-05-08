@@ -6,11 +6,7 @@
 3. 上下文注入：验证 VLM 是否能利用表格上方的文字背景生成更精准的描述。
 """
 import asyncio
-import os
-import sys
-from pathlib import Path
 import pytest
-from loguru import logger
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -64,18 +60,18 @@ The data clearly shows APAC taking the lead.
         
         # Asserting prompt effectiveness
         summary = table_chunk["text_for_embedding"]
-        print(f"\n=======================================================")
-        print(f"🤖 [VLM Table Summary Check]")
-        print(f"=======================================================")
+        print("\n=======================================================")
+        print("🤖 [VLM Table Summary Check]")
+        print("=======================================================")
         print(f"Raw Table Data:\n{table_chunk['full_content']}")
-        print(f"-------------------------------------------------------")
+        print("-------------------------------------------------------")
         print(f"VLM Generated Summary (Used for Vector Search):\n{summary}")
         
         # Check entities
         entities = table_chunk["metadata"].get("entities", [])
-        print(f"-------------------------------------------------------")
+        print("-------------------------------------------------------")
         print(f"VLM Extracted Entities:\n{entities}")
-        print(f"=======================================================\n")
+        print("=======================================================\n")
         
         # The summary should be a JSON parsed result, so it shouldn't have raw JSON syntax like "{"
         assert "{" not in summary and "}" not in summary, "VLM failed to parse JSON properly and leaked syntax"

@@ -2,8 +2,6 @@
 测试模块：验证核心的 Markdown 语义化分块功能
 """
 import pytest
-import numpy as np
-import os
 from rag_enhanced_caption.chunker.parsers import semantic
 from rag_enhanced_caption.chunker.embed_client import (
     get_remote_embedding_client, 
@@ -262,7 +260,7 @@ def test_remote_api_smoke_with_full_sample(remote_embed_fn, sample_markdown):
     chunks = semantic.chunk_markdown(sample_markdown, embed_fn=remote_embed_fn)
     assert len(chunks) > 0
     assert "技术方案" in "".join(["|".join(c.header_path) + c.content for c in chunks])
-    print(f"\n[远程 API 验证成功] 成功处理了全量长样本。")
+    print("\n[远程 API 验证成功] 成功处理了全量长样本。")
 
 def test_demonstrate_semantic_chunking(remote_embed_fn, sample_markdown):
     """

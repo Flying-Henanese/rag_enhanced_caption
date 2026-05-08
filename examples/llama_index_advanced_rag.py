@@ -1,13 +1,13 @@
 import json
 import os
 import requests
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 from pydantic import Field
 from pathlib import Path
 from loguru import logger
 from dotenv import load_dotenv
 
-from llama_index.core import Document, VectorStoreIndex, Settings
+from llama_index.core import VectorStoreIndex, Settings
 from llama_index.core.schema import TextNode, IndexNode, NodeWithScore, QueryBundle, NodeRelationship, RelatedNodeInfo
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from llama_index.core.retrievers import RecursiveRetriever

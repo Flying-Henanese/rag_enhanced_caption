@@ -1,4 +1,3 @@
-import asyncio
 import os
 import requests
 from typing import List, Dict, Any, Tuple, Optional
@@ -8,7 +7,7 @@ from loguru import logger
 from llama_index.core import StorageContext, VectorStoreIndex, Settings, QueryBundle
 from llama_index.core.schema import TextNode, IndexNode, NodeRelationship, RelatedNodeInfo, NodeWithScore
 from llama_index.core.storage.docstore import SimpleDocumentStore
-from llama_index.core.retrievers import AutoMergingRetriever, RecursiveRetriever
+from llama_index.core.retrievers import AutoMergingRetriever, RecursiveRetriever, BaseRetriever
 from llama_index.core.postprocessor.types import BaseNodePostprocessor
 from llama_index.core.embeddings import BaseEmbedding
 
@@ -126,7 +125,6 @@ async def build_advanced_rag_index(
     leaf_nodes = []
     path_nodes = {}
     ui_results = []
-    chunk_map = {chunk["id"]: chunk for chunk in chunks}
     node_id_map = {}
 
     for i, chunk in enumerate(chunks):

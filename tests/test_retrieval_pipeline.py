@@ -7,8 +7,6 @@ import asyncio
 import os
 import sys
 from pathlib import Path
-from typing import Optional
-from loguru import logger
 import dotenv
 
 # Load environment variables
@@ -17,9 +15,7 @@ dotenv.load_dotenv()
 # Add project root to sys.path so we can import from backend
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from llama_index.core import VectorStoreIndex, StorageContext
 from backend.rag_pipeline import build_advanced_rag_index, retrieve_advanced
-from rag_enhanced_caption.chunker.schema import SemanticChunk
 
 # 开启 llama_index 的调试日志，方便观察合并过程
 import logging
@@ -72,7 +68,7 @@ def test_multi_vector_retrieval_pipeline(mock_markdown_content):
     assert len(ui_results) > 0
 
     # 打印建库结果，让开发者看清结构
-    print(f"\n✅ 索引构建完成！")
+    print("\n✅ 索引构建完成！")
     print(f"  - 向量库(Index)包含 {len(index.docstore.docs)} 个搜索节点 (Leaf Nodes)。")
     print(f"  - 文档库(Docstore)包含 {len(storage_context.docstore.docs)} 个全量节点 (Chunks, Elements, Path Nodes)。")
     

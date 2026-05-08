@@ -35,7 +35,6 @@ def _normalize_special_element(special_element: str | None) -> str:
 
 from ..utils.md_parser_utils import (
     extract_table_block,
-    get_title_path,
     split_text_by_length_and_newline,
 )
 from ..utils.table_utils import html_table_to_key_value

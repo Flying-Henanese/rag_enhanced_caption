@@ -1,5 +1,5 @@
 import re
-from bs4 import BeautifulSoup, Tag, Comment
+from bs4 import BeautifulSoup, Comment
 from loguru import logger
 from typing import List, Dict, Any
 
