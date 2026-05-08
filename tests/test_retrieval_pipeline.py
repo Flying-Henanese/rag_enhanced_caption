@@ -15,10 +15,8 @@ dotenv.load_dotenv()
 # Add project root to sys.path so we can import from backend
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from backend.rag_pipeline import build_advanced_rag_index, retrieve_advanced
-
-# 开启 llama_index 的调试日志，方便观察合并过程
-import logging
+import logging  # noqa: E402
+from backend.rag_pipeline import build_advanced_rag_index, retrieve_advanced  # noqa: E402
 logging.getLogger("llama_index.core.retrievers.auto_merging_retriever").setLevel(logging.DEBUG)
 
 @pytest.fixture

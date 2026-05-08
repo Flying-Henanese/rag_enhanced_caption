@@ -7,13 +7,13 @@
 """
 import pytest
 import asyncio
-
 from dotenv import load_dotenv
-load_dotenv()
 
 from rag_enhanced_caption.enhancer.processor import MarkdownMultimodalProcessor
 from rag_enhanced_caption.enhancer.vlm_client import create_default_vlm_client
 from rag_enhanced_caption.chunker.dispatcher import chunk_markdown
+
+load_dotenv()
 
 def test_html_table_parsing_and_enrichment():
     async def run_test():

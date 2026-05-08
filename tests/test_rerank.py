@@ -16,8 +16,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from dotenv import load_dotenv
 load_dotenv()
 
-from backend.rag_pipeline import SiliconFlowRerank
-from llama_index.core.schema import NodeWithScore, TextNode, QueryBundle
+from backend.rag_pipeline import SiliconFlowRerank  # noqa: E402
+from llama_index.core.schema import NodeWithScore, TextNode, QueryBundle  # noqa: E402
 
 def test_siliconflow_rerank_real_api():
     """
