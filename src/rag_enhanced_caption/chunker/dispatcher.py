@@ -8,11 +8,27 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 import copy
 
 from .parsers import semantic
 from .schema import SemanticChunk
+
+
+def _format_chunk_as_markdown(chunk: SemanticChunk) -> str:
+    """Format a semantic chunk into markdown with level-aware heading prefix."""
+    content = (chunk.content or "").strip()
+    if not content:
+        return ""
+
+    header_path = [h.strip() for h in (chunk.header_path or []) if h and h.strip()]
+    if not header_path:
+        return content
+
+    heading_level = min(max(len(header_path), 1), 6)
+    heading_prefix = "#" * heading_level
+    heading = " > ".join(header_path)
+    return f"{heading_prefix} {heading}\n\n{content}"
 
 
 def _build_chunk_records(
@@ -75,7 +91,8 @@ def chunk_markdown(
     filename: str = "document.md",
     parser_config: dict[str, Any] | None = None,
     embed_fn: Any | None = None,
-) -> list[dict[str, Any]]:
+    output_format: Literal["records", "markdown"] = "records",
+) -> list[dict[str, Any]] | list[str]:
     """
     语义化切分 Markdown 并返回带元数据的记录。
 
@@ -92,4 +109,10 @@ def chunk_markdown(
         一系列经过清洗、封装、带有完整上下文路径和元素类型的结构化记录字典。
     """
     semantic_chunks = semantic.chunk_markdown(markdown_content, parser_config, embed_fn)
+    if output_format == "markdown":
+        return [
+            formatted
+            for formatted in (_format_chunk_as_markdown(chunk) for chunk in semantic_chunks)
+            if formatted
+        ]
     return _build_chunk_records(semantic_chunks, file_id, filename)
