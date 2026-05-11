@@ -115,7 +115,7 @@ def extract_table_block(
     return j, "\n".join(original_lines[table_start:table_end])
 
 
-def split_text_by_length_and_newline(
+def split_long_text_hierarchically(
     text: str,
     max_length: int,
     embed_fn: Callable[[list[str]], Any] | None,

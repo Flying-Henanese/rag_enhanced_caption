@@ -21,7 +21,7 @@ from ..schema import SemanticChunk
 
 from ..utils.md_parser_utils import (
     extract_table_block,
-    split_text_by_length_and_newline,
+    split_long_text_hierarchically,
 )
 from ..utils.table_utils import html_table_to_key_value
 
@@ -33,7 +33,23 @@ _CONTROL_SPECIAL_ELEMENTS = {
 
 
 def _normalize_special_element(special_element: str | None) -> str:
-    """过滤解析过程中的控制标签，避免其进入最终分类。"""
+    """
+    对解析出的元素类型标签进行规范化处理，过滤无意义的控制标签。
+
+    此函数是下游处理逻辑的“分拣开关”，其核心作用包括：
+    1. 规范分类：避免像 "none" 这种解析器内部标签泄露，确保 element_type 具有明确语义。
+    2. 决策分块策略：类型为 "text" 的分块会触发语义长度切分，而特殊块（如 Image/Table）则保持完整性。
+    3. 触发 VLM 增强：下游 Enhancer 依据此类型决定是否对内容执行图像描述或表格分析。
+    4. 支持元数据过滤：确保存入向量数据库的类型标签可用于 RAG 阶段的分类检索。
+
+    若输入为空或属于 _CONTROL_SPECIAL_ELEMENTS（如 "none"），将统一归类为基础的 "text"。
+
+    Args:
+        special_element: 原始的元素类型字符串（通常来自 token.type）。
+
+    Returns:
+        规范化后的类型字符串（如 "text", "Image", "Table" 等）。
+    """
     if not special_element:
         return "text"
     special = special_element.strip()
@@ -52,27 +68,56 @@ def _flush_content(
     allow_split: bool = False,
     state: dict | None = None,
 ) -> None:
+    """
+    将当前累积的文本内容“冲刷”并封装为一个或多个 SemanticChunk 放入结果列表。
+
+    此函数在解析过程中不断向前，它负责将解析过程中攒下的 current_content 按照
+    指定的类型（special_element）和长度限制（max_length）转化为结构化块。
+
+    处理逻辑包括：
+    1. 标题路径提取：从 title_stack 中提取当前的层级上下文。
+    2. 类型规范化：通过 _normalize_special_element 确定块类型。
+    3. 父子关联维护：如果当前是特殊块（图片/表格），尝试将其关联到最近的一个文本块。避免其失去语境，成为孤儿。
+    4. 长度校验与拆分：对文本块进行 Token 计数，若超长则执行语义或按行拆分。
+
+    Args:
+        result: 存储最终生成的 SemanticChunk 的列表。
+        current_content: 当前已解析但尚未提交的行列表。执行后会被清空。
+        title_stack: 当前的标题层级栈。
+        max_length: 单个分块允许的最大 Token 数量。
+        embed_fn: 用于语义切分的 Embedding 函数。
+        special_element: 显式指定的元素类型。
+        allow_split: 是否允许对此块进行二次拆分。通常图片/表格为 False。
+        state: 跨函数共享的状态字典，用于记录上一个文本块索引等信息。
+    """
     if not current_content:
         return
 
     if state is None:
+        # 初始化状态字典，记录上一个文本块索引为 -1
         state = {"last_text_idx": -1}
 
+    # 使用换行符合并current_content中的多行文本，移除首尾空格
     content = "\n".join(current_content).strip()
+    # 如果合并后为空，后面就不用看了
     if not content:
         current_content.clear()
         return
-
+    # 构建标题路径，用于还原当前块的位置和语境
     path_list = [t for t in title_stack if t]
+    # 规范化元素类型，确保其符合预期值
     element_type = _normalize_special_element(special_element)
 
-    # Determine parent_id for non-text elements
+    # 建立父子关联：非文本块（如图片/表格）会尝试寻找并记录上一个文本块的 ID 作为其 parent_id
+    # 避免其失去语境，成为孤儿
     parent_id = (
         str(state["last_text_idx"])
         if element_type != "text" and state["last_text_idx"] != -1
         else None
     )
 
+    # 情况 A: 特殊元素块（如 Image, Table）且不允许进一步切分
+    # 这类块通常需要保持原子性，即使长度稍长也会作为一个整体，以便 VLM 完整理解。
     if element_type != "text" and not allow_split:
         chunk = SemanticChunk(
             content=content,
@@ -82,29 +127,36 @@ def _flush_content(
             parent_id=parent_id,
         )
         result.append(chunk)
+        
+    # 情况 B: 普通文本块（text）或允许拆分的特殊块
     else:
+        # 如果长度超过限制，调用层次化切分策略
         if count_tokens(content) > max_length:
-            chunks = split_text_by_length_and_newline(
+            chunks = split_long_text_hierarchically(
                 content, max_length, embed_fn=embed_fn, token_count_fn=count_tokens
             )
+            # 这里使用enumerate来给每个分块添加一个唯一的索引，方便后续关联
+            # 从1开始，符合人类习惯的编号方式
             for idx, text_chunk in enumerate(chunks, 1):
                 chunk = SemanticChunk(
                     content=text_chunk,
                     full_content=text_chunk,
                     header_path=path_list.copy() + [f"Part {idx}"],
                     element_type=element_type,
-                    parent_id=parent_id if element_type != "text" else None,
+                    parent_id=parent_id,
                 )
                 result.append(chunk)
+                # 记录最后一个生成的文本块索引，供后续特殊元素（如图片）作为父节点使用
                 if element_type == "text":
                     state["last_text_idx"] = len(result) - 1
+        # 长度适中，直接封装
         else:
             chunk = SemanticChunk(
                 content=content,
                 full_content=content,
                 header_path=path_list.copy(),
                 element_type=element_type,
-                parent_id=parent_id if element_type != "text" else None,
+                parent_id=parent_id,
             )
             result.append(chunk)
             if element_type == "text":
