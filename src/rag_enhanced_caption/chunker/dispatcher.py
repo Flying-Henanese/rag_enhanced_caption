@@ -112,7 +112,9 @@ def chunk_markdown(
     if output_format == "markdown":
         return [
             formatted
-            for formatted in (_format_chunk_as_markdown(chunk) for chunk in semantic_chunks)
+            for formatted in (
+                _format_chunk_as_markdown(chunk) for chunk in semantic_chunks
+            )
             if formatted
         ]
     return _build_chunk_records(semantic_chunks, file_id, filename)

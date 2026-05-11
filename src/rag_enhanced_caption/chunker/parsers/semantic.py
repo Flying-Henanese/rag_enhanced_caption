@@ -127,7 +127,7 @@ def _flush_content(
             parent_id=parent_id,
         )
         result.append(chunk)
-        
+
     # 情况 B: 普通文本块（text）或允许拆分的特殊块
     else:
         # 如果长度超过限制，调用层次化切分策略

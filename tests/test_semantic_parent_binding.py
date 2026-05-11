@@ -28,10 +28,14 @@ def test_image_and_table_bind_to_nearest_text_parent():
     )
 
     first_text_idx = next(
-        i for i, c in enumerate(chunks) if "第一段正文" in c.content and c.element_type == "text"
+        i
+        for i, c in enumerate(chunks)
+        if "第一段正文" in c.content and c.element_type == "text"
     )
     second_text_idx = next(
-        i for i, c in enumerate(chunks) if "第二段正文" in c.content and c.element_type == "text"
+        i
+        for i, c in enumerate(chunks)
+        if "第二段正文" in c.content and c.element_type == "text"
     )
 
     arch_image_chunk = next(
@@ -54,4 +58,3 @@ def test_image_and_table_bind_to_nearest_text_parent():
         f"第二张图片 parent_id 应该绑定第二段文本索引 {second_text_idx}，"
         f"实际为 {flow_image_chunk.parent_id}"
     )
-
