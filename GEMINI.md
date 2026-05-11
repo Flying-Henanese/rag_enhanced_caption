@@ -24,7 +24,8 @@ This document provides foundational guidance and architectural mandates for the 
 ## 🔄 Workflows
 
 - **Testing**:
-  - Run the functional test script: `python tests/test_processor.py`.
+  - Always run Python commands through `uv run` (for example, `uv run python ...`) to ensure the correct project environment is used.
+  - Run the functional test script: `uv run python tests/test_processor.py`.
   - Ensure a `.env` file exists in the root or `src` directory for VLM configuration.
 - **Dependency Management**:
   - Use `uv add <package>` to add production core dependencies to `pyproject.toml`.
