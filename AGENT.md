@@ -24,6 +24,12 @@ This file defines how Codex should operate in this repository. Follow these rule
   - Use Google-style docstrings for classes and public methods.
 - VLM output parsing:
   - Use `robust_json_parse` for VLM/LLM structured output parsing.
+- Public API Stability:
+  - The following modules are primary exposed interfaces. Avoid changing or breaking their public API signatures (class constructors and main methods) to maintain compatibility for external users:
+    - `src/rag_enhanced_caption/chunker/dispatcher.py` (`MarkdownSemanticDispatcher`)
+    - `src/rag_enhanced_caption/chunker/embed_client.py` (Embedding client factories)
+    - `src/rag_enhanced_caption/enhancer/processor.py` (`MarkdownMultimodalProcessor`)
+    - `src/rag_enhanced_caption/enhancer/context_extractor.py` (`MarkdownContextExtractor`)
 
 ## 3. Workflow Requirements
 

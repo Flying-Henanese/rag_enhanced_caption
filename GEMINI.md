@@ -9,6 +9,11 @@ This document provides foundational guidance and architectural mandates for the 
 - **Markdown Parsing**: `markdown-it-py` is the core engine for token-based surgical extraction.
 - **Asynchronous Pattern**: All VLM calls and processing pipelines MUST be `async`.
 - **Project Structure**: Follows the standard `src` layout (`src/rag_enhanced_caption/`).
+- **Public API Stability**: The following modules are primary public-facing entry points. Avoid making breaking changes to their public class/function signatures:
+  - `src/rag_enhanced_caption/chunker/dispatcher.py` (`MarkdownSemanticDispatcher`)
+  - `src/rag_enhanced_caption/chunker/embed_client.py` (Embedding client factories)
+  - `src/rag_enhanced_caption/enhancer/processor.py` (`MarkdownMultimodalProcessor`)
+  - `src/rag_enhanced_caption/enhancer/context_extractor.py` (`MarkdownContextExtractor`)
 
 ## 🛠 Coding Conventions
 
