@@ -12,7 +12,7 @@ from loguru import logger
 from dotenv import load_dotenv
 
 # 加载环境变量 (确保配置加载的优先级)
-load_dotenv()
+load_dotenv(override=False)
 
 
 def get_remote_embedding_client(
