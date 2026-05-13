@@ -1,80 +1,46 @@
-# AGENT.md — Codex Execution Guide for `rag-enhanced-caption`
+# Project Instructions: rag-enhanced-caption
 
-This file defines how Codex should operate in this repository. Follow these rules for all code changes unless the user explicitly asks otherwise.
+This document provides foundational guidance and architectural mandates for the `rag-enhanced-caption` project.
 
-## 1. Core Architecture & Tech Stack
+## 🏗 Core Architecture & Tech Stack
 
-- Package/dependency management: use `uv`.
-- Build backend: `hatchling` (configured in `pyproject.toml`).
-- Markdown parsing core: `markdown-it-py`.
-- VLM pipeline design: keep calls and processing flows asynchronous.
-- Project layout: standard `src` structure under `src/rag_enhanced_caption/`.
+- **Package Management**: Use `uv` for all dependency management and environment orchestration.
+- **Build Backend**: `hatchling` (configured in `pyproject.toml`).
+- **Markdown Parsing**: `markdown-it-py` is the core engine for token-based surgical extraction.
+- **Asynchronous Pattern**: All VLM calls and processing pipelines MUST be `async`.
+- **Project Structure**: Follows the standard `src` layout (`src/rag_enhanced_caption/`).
 
-## 2. Coding Conventions
+## 🛠 Coding Conventions
 
-- Lint/format: use `ruff`.
-  - Run `ruff check .` and `ruff format .` after meaningful changes.
-- Naming/logging:
-  - Main package name is `rag_enhanced_caption`.
-  - Use `loguru` logging (`from loguru import logger`), not `logging`.
-- Type safety:
-  - Add explicit type hints to all functions/methods.
-  - Use modern Python typing (3.10+): `list[str]`, `dict[str, Any]`, `X | None`.
-- Documentation:
-  - Use Google-style docstrings for classes and public methods.
-- VLM output parsing:
-  - Use `robust_json_parse` for VLM/LLM structured output parsing.
-- Public API Stability:
-  - The following modules are primary exposed interfaces. Avoid changing or breaking their public API signatures (class constructors and main methods) to maintain compatibility for external users:
-    - `src/rag_enhanced_caption/chunker/dispatcher.py` (`MarkdownSemanticDispatcher`)
-    - `src/rag_enhanced_caption/chunker/embed_client.py` (Embedding client factories)
-    - `src/rag_enhanced_caption/enhancer/processor.py` (`MarkdownMultimodalProcessor`)
-    - `src/rag_enhanced_caption/enhancer/context_extractor.py` (`MarkdownContextExtractor`)
+- **Linting & Formatting**: Default to using `ruff`. Run `ruff check .` and `ruff format .` after making significant code changes.
+- **Naming & Logging**: 
+  - The main package name is `rag_enhanced_caption`.
+  - Use `loguru` for all logging (`from loguru import logger`). Do not use the standard `logging` library.
+- **Type Safety**: All functions and methods MUST have explicit type hints.
+  - **Modern Typing (Python 3.10+)**: Use built-in collection types as generics (e.g., `list[str]`, `dict[str, Any]` instead of `typing.List` or `typing.Dict`). Use the `|` operator instead of `Union` or `Optional` (e.g., `str | None`).
+- **Documentation**: Use Google-style docstrings for all classes and public methods.
+- **Error Handling**: Use the `robust_json_parse` utility for all VLM output parsing to handle potential markdown formatting in AI responses.
 
-## 3. Workflow Requirements
+## 🔄 Workflows
 
-- Testing:
-  - Always run Python commands via `uv run` (for example, `uv run python ...`), rather than bare `python`, to ensure the project environment is used consistently.
-  - Minimum validation after code changes:
-    - Run `ruff check .`.
-    - Run `uv run python tests/test_processor.py` when the change can affect processing logic, parsing behavior, or VLM flows.
-  - If tests are skipped (e.g., missing external credentials, non-functional doc-only change, or environment constraints), explicitly state what was skipped and why in the final response.
-  - Run `uv run python tests/test_processor.py` for functional validation when relevant.
-  - Ensure `.env` exists at repo root or `src/` for VLM config.
-- Dependency management (strict):
-  - Add runtime deps via `uv add <package>`.
-  - Add dev/test deps via `uv add --dev <package>`.
-  - For demo/example/integration-only deps, use optional groups, e.g. `uv add --optional demo <package>`.
-  - Do not place non-core dependencies (e.g., web frameworks, heavyweight integration stacks) into main `dependencies`.
-  - Never manually edit dependency lists in `pyproject.toml` or `uv.lock`.
+- **Testing**:
+  - Always run Python commands through `uv run` (for example, `uv run python ...`) to ensure the correct project environment is used.
+  - Run the functional test script: `uv run python tests/test_processor.py`.
+  - Ensure a `.env` file exists in the root or `src` directory for VLM configuration.
+- **Dependency Management**:
+  - Use `uv add <package>` to add production core dependencies to `pyproject.toml`.
+  - Use `uv add --dev <package>` for development and test dependencies (e.g., linters, testing frameworks).
+  - **CRITICAL**: Do NOT add dependencies required only for demos, examples, integrations, or non-core features (e.g., `fastapi`, `llama-index-core`) to the main `dependencies` array. Use optional groups instead (e.g., `uv add --optional demo <package>`).
+  - NEVER manually edit `pyproject.toml` dependency lists or `uv.lock`. All changes must go through `uv`.
 
-## 4. Constraints & Anti-Patterns
+## 🚫 Anti-patterns & Constraints
 
-- Avoid synchronous I/O in performance-critical paths where async alternatives are appropriate.
-- Keep the library lightweight: avoid introducing heavy frameworks as core dependencies.
-- Preserve Markdown correctness:
-  - Ensure injected `<details>` blocks are valid and properly closed.
-  - Do not break existing Markdown rendering.
+- **No Synchronous IO**: Avoid `requests` or synchronous `open()` in performance-critical paths; prefer async alternatives where applicable (though local file reads in this project are currently simple).
+- **Minimal Dependencies**: Do not add heavy frameworks (like LangChain, LlamaIndex) or web frameworks (like FastAPI) as core dependencies; keep this as a lightweight utility library. If a dependency is only needed for an example, a demo, or a specific integration, add it to the corresponding optional dependency group (e.g., `[project.optional-dependencies] demo = [...]`) rather than the main dependencies list.
+- **Clean Markdown**: Ensure injected `<details>` blocks are correctly closed and don't break existing Markdown rendering.
 
-## 5. Codex Editing Behavior
+## 🤖 Agent Instructions (For AI Assistants)
 
-- Keep edits surgical. Do not perform unrelated refactors/cleanup unless requested.
-- If a function/method signature changes, update related Google-style docstrings in the same change.
-- For LLM/VLM API calls:
-  - Handle network errors and timeouts with `try...except`.
-  - Use `logger.exception(...)` when logging exceptions that need full traceback context.
-
-## 6. Priority & Conflict Handling
-
-- Direct user instructions override this file.
-- If rules conflict, prefer minimal, safe changes that preserve existing architecture.
-- If a required change would violate these standards, explicitly call out the tradeoff in the final response.
-
-## 7. Configuration & Secrets Safety
-
-- Never commit secrets (API keys, tokens, credentials) or real `.env` values into the repository.
-- Keep `.env` local-only and out of version control.
-- When introducing a new required environment variable:
-  - Add it to `.env.template` with a safe placeholder.
-  - Update corresponding setup documentation (README/README_zh if applicable).
-- In logs, examples, and test artifacts, redact sensitive values and avoid printing raw secrets.
+- **Refactoring Scope**: Unless explicitly requested by the user, do not perform unrelated refactoring or "cleanups". Maintain surgical precision in your edits.
+- **Docstring Updates**: When modifying a function or method signature (e.g., adding parameters, changing return types), you MUST synchronously update its Google-style docstring.
+- **Error Handling in API Calls**: When handling LLM/VLM API calls, account for network exceptions and timeouts. Use `try...except` blocks and log errors with full tracebacks using `logger.exception`.
