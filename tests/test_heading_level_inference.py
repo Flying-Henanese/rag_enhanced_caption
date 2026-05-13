@@ -7,7 +7,11 @@ def test_numbered_heading_recovers_hierarchy_in_header_path():
 
 Body under mis-leveled heading.
 """
-    chunks = semantic.chunk_markdown(md, parser_config={"chunk_token_num": 512}, embed_fn=None)
+    chunks = semantic.chunk_markdown(
+        md,
+        parser_config={"chunk_token_num": 512},
+        embed_fn=None,
+    )
     text_chunks = [c for c in chunks if c.element_type == "text" and c.content.strip()]
 
     assert text_chunks, "Expected at least one text chunk"
