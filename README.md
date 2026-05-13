@@ -255,6 +255,10 @@ Some tests require external API credentials and will skip if the corresponding e
 - SVG images are currently skipped during VLM analysis.
 - Some retrieval-related tests reference optional integration code paths and external services.
 
+## Roadmap
+
+- Improve chunk-size hard limits for extreme cases where a single very long sentence can still exceed the configured token threshold after sentence-level splitting.
+
 ## License
 
 Apache-2.0.
