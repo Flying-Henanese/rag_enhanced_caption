@@ -25,7 +25,14 @@ def _format_chunk_as_markdown(chunk: SemanticChunk) -> str:
     if not header_path:
         return content
 
-    heading_level = min(max(len(header_path), 1), 6)
+    metadata_level = 0
+    if isinstance(chunk.metadata, dict):
+        try:
+            metadata_level = int(chunk.metadata.get("heading_level", 0) or 0)
+        except (TypeError, ValueError):
+            metadata_level = 0
+
+    heading_level = min(max(metadata_level or len(header_path), 1), 6)
     heading_prefix = "#" * heading_level
     heading = " > ".join(header_path)
     return f"{heading_prefix} {heading}\n\n{content}"

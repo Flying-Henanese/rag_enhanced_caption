@@ -21,6 +21,7 @@ from ..schema import SemanticChunk
 
 from ..utils.md_parser_utils import (
     extract_table_block,
+    infer_heading_level,
     split_long_text_hierarchically,
 )
 from ..utils.table_utils import html_table_to_key_value
@@ -105,6 +106,7 @@ def _flush_content(
         return
     # 构建标题路径，用于还原当前块的位置和语境
     path_list = [t for t in title_stack if t]
+    heading_level = max((idx + 1 for idx, t in enumerate(title_stack) if t), default=0)
     # 规范化元素类型，确保其符合预期值
     element_type = _normalize_special_element(special_element)
 
@@ -125,6 +127,7 @@ def _flush_content(
             header_path=path_list.copy(),
             element_type=element_type,
             parent_id=parent_id,
+            metadata={"heading_level": heading_level},
         )
         result.append(chunk)
 
@@ -144,6 +147,7 @@ def _flush_content(
                     header_path=path_list.copy() + [f"Part {idx}"],
                     element_type=element_type,
                     parent_id=parent_id,
+                    metadata={"heading_level": heading_level},
                 )
                 result.append(chunk)
                 # 记录最后一个生成的文本块索引，供后续特殊元素（如图片）作为父节点使用
@@ -157,6 +161,7 @@ def _flush_content(
                 header_path=path_list.copy(),
                 element_type=element_type,
                 parent_id=parent_id,
+                metadata={"heading_level": heading_level},
             )
             result.append(chunk)
             if element_type == "text":
@@ -309,13 +314,21 @@ def chunk_markdown(
             state["last_text_idx"] = -1
 
             level = int(token.tag[1:]) if token.tag and len(token.tag) > 1 else 1
-            last_heading_idx = level - 1
             inline_token = tokens[i + 1]
             if inline_token.type == "inline":
                 full_title = inline_token.content.strip()
+                # Recover heading hierarchy from numbering patterns (e.g. "5.5.5")
+                # when source markdown uses a flat '#' level.
+                inferred_level = infer_heading_level(full_title)
+                level = max(level, inferred_level)
+                level = max(1, min(level, 6))
+                last_heading_idx = level - 1
                 title_stack[last_heading_idx] = full_title
                 for j in range(last_heading_idx + 1, 6):
                     title_stack[j] = ""
+            else:
+                level = max(1, min(level, 6))
+                last_heading_idx = level - 1
             i += 3
             continue
 
