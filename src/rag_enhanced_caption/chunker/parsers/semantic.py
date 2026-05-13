@@ -481,7 +481,7 @@ def chunk_markdown(
             _flush_content(
                 result, current_content, title_stack, max_length, embed_fn, state=state
             )
-            current_content.append(f"$ {token.content} $")
+            current_content.append(f"$$\n{token.content.strip()}\n$$")
             _flush_content(
                 result,
                 current_content,

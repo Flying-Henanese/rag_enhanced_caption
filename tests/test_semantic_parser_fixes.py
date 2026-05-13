@@ -90,3 +90,34 @@ def test_html_block_summary_context_fix():
     # 验证之前的常规标题上下文依然存在
     has_normal_heading = any("版本记录" in header for header in list_chunk.header_path)
     assert has_normal_heading, "原有的外层标题上下文 (版本记录) 丢失了。"
+
+
+def test_math_block_and_inline_math_roundtrip():
+    """
+    测试点：
+    1. 独立公式（块级公式）应保持为 $$...$$ 形式，不应被降级为 $...$。
+    2. 行内公式应保持 $...$ 形式，并作为普通段落文本保留。
+    """
+    markdown_content = """
+## 数学测试
+
+这是行内公式：$a+b=c$，用于验证 inline math。
+
+$$
+E=mc^2
+$$
+"""
+    chunks = semantic.chunk_markdown(
+        markdown_content, embed_fn=lambda x: [0.0] * len(x)
+    )
+
+    inline_chunks = [c for c in chunks if "这是行内公式" in c.content]
+    assert inline_chunks, "未找到包含行内公式的文本块。"
+    assert "$a+b=c$" in inline_chunks[0].content, "行内公式未按 $...$ 形式保留。"
+
+    math_block_chunks = [c for c in chunks if c.element_type == "Math Block"]
+    assert math_block_chunks, "未找到 Math Block 块级公式。"
+    math_content = math_block_chunks[0].content
+    assert math_content.startswith("$$\n"), "块级公式起始定界符应为 $$。"
+    assert math_content.endswith("\n$$"), "块级公式结束定界符应为 $$。"
+    assert "E=mc^2" in math_content, "块级公式内容缺失。"
