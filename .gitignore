@@ -67,3 +67,6 @@ dmypy.json
 # Project specific
 *.log
 /output/
+
+# ruff cache
+.ruff_cache/
