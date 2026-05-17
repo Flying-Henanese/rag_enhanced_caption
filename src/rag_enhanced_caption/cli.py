@@ -151,6 +151,7 @@ async def process_document(file_path: Path, output_dir: Path):
     processor = MarkdownMultimodalProcessor(vlm_func=vlm_client, max_concurrency=2)
     # 图片解析基础路径仍然是 Markdown 文件的相对目录
     base_dir = file_path.parent.absolute()
+    chunks = await processor.enrich_chunks(chunks=chunks, base_dir=base_dir)
 
     # --- 阶段 3: 构建层级记录并保存 ---
     logger.info("Phase 3: Building Parent-Child Hierarchy & Persistence")
@@ -167,11 +168,8 @@ async def process_document(file_path: Path, output_dir: Path):
         for idx, chunk in enumerate(chunks):
             logger.info(f"Processing chunk {idx + 1}/{len(chunks)}...")
 
-            # 运行 VLM 增强
-            enriched_text = await processor.enrich_markdown(
-                md_content=chunk["content"], base_dir=str(base_dir)
-            )
-            chunk["content"] = enriched_text
+            # 当前增强流程写入 text_for_embedding，保留原始 content
+            enriched_text = chunk["content"]
 
             # 拆分父子记录
             parent, children = _build_hierarchical_records(chunk, file_path)
