@@ -95,8 +95,8 @@ if embed_model_name:
 
 RESOURCE_DIR = Path("test_resource")
 OUTPUT_DIR = Path("output")
-DOCSTORE_PATH = OUTPUT_DIR / "rag-anything_docstore_new.jsonl"
-INDEX_PATH = OUTPUT_DIR / "rag-anything_index_new.jsonl"
+DOCSTORE_PATH = OUTPUT_DIR / "docstore_new.jsonl"
+INDEX_PATH = OUTPUT_DIR / "index_new.jsonl"
 
 
 class RerankedRetriever(BaseRetriever):
