@@ -37,9 +37,12 @@ This split helps keep noisy raw Markdown, large tables, and image references out
 The current repository is centered on:
 - the `rag-caption` CLI for end-to-end processing
 - reusable Python modules under `src/rag_enhanced_caption/`
+- advanced ingestion and retrieval workflows under `examples/`
 - tests for chunking, HTML cleaning, VLM enrichment, and retrieval-related behaviors
 
-The README below reflects the repository as it exists now. Older references to `backend/` or `examples/` are intentionally removed because those directories are not part of the current tree.
+The README below reflects the repository as it exists now. Older references to a
+standalone `backend/` application are intentionally omitted because it is not
+part of the current tree.
 
 ## Installation
 
@@ -212,6 +215,69 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
+## Hybrid BM25 + Embedding Retrieval
+
+The advanced examples provide a second retrieval path for exact keywords that
+may be weakened or omitted by semantic summaries. This is useful for table
+headers and rows, dates, email addresses, product names, identifiers, and other
+literal values.
+
+This path is additive and does not change the `rag-caption` CLI output contract.
+`examples/data_ingestion_pipeline.py` builds an additional
+`<name>_sparse.jsonl` artifact alongside its vector index and docstore files.
+Each record is a backend-neutral searchable object:
+
+```json
+{
+  "id": "stable-field-id",
+  "owner_node_id": "rag-anything_chunk_89",
+  "searchable_text": "Project: MiniRAG; Description: ...",
+  "field_type": "table_row",
+  "metadata": {"row_index": 2},
+  "schema_version": 1
+}
+```
+
+Searchable objects are extracted deterministically without an LLM. The current
+extractor recognizes Markdown and HTML table headers/rows, dates, and email
+addresses. Its interface is intentionally pluggable so additional fixed-format
+fields or storage backends can be added later. JSONL is the current persistence
+backend; the schema is independent of BM25 and can later be mapped to
+Elasticsearch or MongoDB.
+
+At query time, `examples/llama_index_advanced_rag.py` uses this flow:
+
+```text
+embedding top-k + BM25 top-k
+              ↓
+ reciprocal rank fusion (RRF)
+              ↓
+ RecursiveRetriever → reranker → short-context expansion → AutoMerge
+```
+
+RRF combines rank positions rather than comparing incompatible vector and BM25
+scores directly. Both paths resolve to the same LlamaIndex node IDs, so the
+existing docstore remains the source of full content. If the sparse JSONL file
+is missing or empty, the example automatically falls back to vector-only
+retrieval.
+
+Build the example artifacts for `rag-anything.md`, then run the advanced
+retrieval example:
+
+```bash
+uv run python -c "import asyncio; from examples.data_ingestion_pipeline import process_document; asyncio.run(process_document('test_resource/rag-anything.md'))"
+uv run python examples/llama_index_advanced_rag.py
+```
+
+The ingestion command creates:
+
+```text
+output/
+├── rag-anything_index_new.jsonl
+├── rag-anything_docstore_new.jsonl
+└── rag-anything_sparse.jsonl
+```
+
 ## Package Layout
 
 ```text
@@ -222,12 +288,21 @@ src/rag_enhanced_caption/
 │   ├── embed_client.py
 │   ├── parsers/semantic.py
 │   └── utils/
-└── enhancer/
-    ├── cleaning_utils.py
-    ├── context_extractor.py
-    ├── processor.py
-    ├── prompts.py
-    └── vlm_client.py
+├── enhancer/
+│   ├── cleaning_utils.py
+│   ├── context_extractor.py
+│   ├── processor.py
+│   ├── prompts.py
+│   └── vlm_client.py
+├── lexical_search/
+│   ├── bm25.py
+│   ├── builder.py
+│   ├── extractors.py
+│   ├── fusion.py
+│   ├── repository.py
+│   └── schema.py
+└── integrations/llama_index/
+    └── hybrid_retriever.py
 ```
 
 ## Test Coverage
@@ -236,6 +311,8 @@ The repository currently includes tests for:
 - semantic chunking and parser edge cases
 - HTML table cleaning / extraction
 - VLM enrichment behavior
+- searchable-object extraction, JSONL persistence, BM25 ranking, and RRF fusion
+- vector and BM25 candidate integration with LlamaIndex
 - integration-oriented retrieval and rerank flows
 
 Typical commands:

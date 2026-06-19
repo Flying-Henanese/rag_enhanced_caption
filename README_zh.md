@@ -37,9 +37,10 @@ CLI 处理一份 Markdown 后，会产出三类文件：
 当前仓库的核心内容是：
 - `rag-caption` CLI，负责端到端处理
 - `src/rag_enhanced_caption/` 下的可复用 Python 模块
+- `examples/` 下的高级入库与检索流程
 - 针对分块、HTML 清洗、VLM 增强和检索相关行为的测试
 
-下面这份 README 以当前仓库实际内容为准。历史版本里提到的 `backend/`、`examples/` 等目录，在当前仓库中并不存在，所以这里不再保留。
+下面这份 README 以当前仓库实际内容为准。历史版本里提到的独立 `backend/` 应用不在当前仓库中，因此不再保留相关说明。
 
 ## 安装
 
@@ -212,6 +213,53 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
+## BM25 + Embedding 混合检索
+
+高级示例提供了第二条面向精确关键词的召回路径，用于补充可能被语义摘要弱化或省略的字面信息。它尤其适合表头、表格行、日期、邮箱、产品名称、标识符等内容。
+
+这条路径以增量方式工作，不改变 `rag-caption` CLI 的输出约定。`examples/data_ingestion_pipeline.py` 会在向量索引和 docstore 文件之外，额外生成 `<name>_sparse.jsonl`。其中每一行都是与后端无关的 searchable object：
+
+```json
+{
+  "id": "stable-field-id",
+  "owner_node_id": "rag-anything_chunk_89",
+  "searchable_text": "项目：MiniRAG；描述：...",
+  "field_type": "table_row",
+  "metadata": {"row_index": 2},
+  "schema_version": 1
+}
+```
+
+searchable object 的抽取不依赖 LLM。目前的确定性抽取器支持 Markdown / HTML 表格的表头和数据行，以及日期、邮箱等固定格式字段。抽取接口本身是可扩展的，后续可以继续增加新的固定格式字段或存储后端。当前使用 JSONL 持久化；其数据结构与 BM25 实现解耦，未来可以映射到 Elasticsearch 或 MongoDB。
+
+查询时，`examples/llama_index_advanced_rag.py` 使用以下流程：
+
+```text
+Embedding top-k + BM25 top-k
+               ↓
+        倒数秩融合（RRF）
+               ↓
+RecursiveRetriever → reranker → 短上下文扩展 → AutoMerge
+```
+
+RRF 根据排名位置进行融合，避免直接比较量纲不同的向量分数和 BM25 分数。两条召回路径最终都映射到相同的 LlamaIndex node ID，因此完整内容仍然以现有 docstore 为准。如果 sparse JSONL 不存在或内容为空，示例会自动退化为纯向量检索。
+
+可以先为 `rag-anything.md` 构建示例数据，再运行高级检索示例：
+
+```bash
+uv run python -c "import asyncio; from examples.data_ingestion_pipeline import process_document; asyncio.run(process_document('test_resource/rag-anything.md'))"
+uv run python examples/llama_index_advanced_rag.py
+```
+
+入库命令会生成：
+
+```text
+output/
+├── rag-anything_index_new.jsonl
+├── rag-anything_docstore_new.jsonl
+└── rag-anything_sparse.jsonl
+```
+
 ## 包结构
 
 ```text
@@ -222,12 +270,21 @@ src/rag_enhanced_caption/
 │   ├── embed_client.py
 │   ├── parsers/semantic.py
 │   └── utils/
-└── enhancer/
-    ├── cleaning_utils.py
-    ├── context_extractor.py
-    ├── processor.py
-    ├── prompts.py
-    └── vlm_client.py
+├── enhancer/
+│   ├── cleaning_utils.py
+│   ├── context_extractor.py
+│   ├── processor.py
+│   ├── prompts.py
+│   └── vlm_client.py
+├── lexical_search/
+│   ├── bm25.py
+│   ├── builder.py
+│   ├── extractors.py
+│   ├── fusion.py
+│   ├── repository.py
+│   └── schema.py
+└── integrations/llama_index/
+    └── hybrid_retriever.py
 ```
 
 ## 测试覆盖
@@ -236,6 +293,8 @@ src/rag_enhanced_caption/
 - 语义切分与解析器边界场景
 - HTML 表格清洗 / 提取
 - VLM 增强行为
+- searchable object 抽取、JSONL 持久化、BM25 排序和 RRF 融合
+- 向量与 BM25 候选结果的 LlamaIndex 集成
 - 面向集成的检索、重排相关流程
 
 常用命令示例：
