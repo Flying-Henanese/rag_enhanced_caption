@@ -4,6 +4,7 @@ from pathlib import Path
 
 import dotenv
 import pytest
+import requests
 from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
 
 
@@ -18,6 +19,27 @@ assert spec and spec.loader
 spec.loader.exec_module(advanced_rag)
 
 SiliconFlowRerank = advanced_rag.SiliconFlowRerank
+
+
+def test_siliconflow_rerank_warns_and_falls_back_on_timeout(monkeypatch):
+    warnings = []
+
+    def raise_timeout(*args, **kwargs):
+        assert kwargs["timeout"] == 30.0
+        raise requests.Timeout("request timed out")
+
+    monkeypatch.setattr(advanced_rag.requests, "post", raise_timeout)
+    monkeypatch.setattr(advanced_rag.logger, "warning", warnings.append)
+    reranker = SiliconFlowRerank(api_key="test-key", top_n=1)
+    nodes = [
+        NodeWithScore(node=TextNode(text="first"), score=1.0),
+        NodeWithScore(node=TextNode(text="second"), score=0.5),
+    ]
+
+    result = reranker._postprocess_nodes(nodes, QueryBundle(query_str="query"))
+
+    assert result == nodes[:1]
+    assert warnings == ["Rerank request timed out after 30.0 seconds"]
 
 
 def test_siliconflow_rerank_real_api():

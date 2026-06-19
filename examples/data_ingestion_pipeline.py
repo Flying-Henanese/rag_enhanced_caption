@@ -3,6 +3,7 @@ import json
 import sys
 import time
 from pathlib import Path
+from typing import Any
 from dotenv import load_dotenv
 from loguru import logger
 
@@ -24,6 +25,21 @@ from rag_enhanced_caption.enhancer.processor import MarkdownMultimodalProcessor 
 from rag_enhanced_caption.enhancer.vlm_client import create_default_vlm_client  # noqa: E402
 from rag_enhanced_caption.chunker.dispatcher import chunk_markdown  # noqa: E402
 from rag_enhanced_caption.enhancer.cleaning_utils import compress_and_relink_chunks  # noqa: E402
+from rag_enhanced_caption.lexical_search.builder import build_searchable_objects  # noqa: E402
+from rag_enhanced_caption.lexical_search.repository import (  # noqa: E402
+    JsonlSearchableObjectRepository,
+)
+
+
+def write_searchable_objects(chunks: list[dict[str, Any]], output_path: Path) -> None:
+    """Extract and persist backend-neutral lexical search objects.
+
+    Args:
+        chunks: Enriched semantic chunks using the stable chunk IDs.
+        output_path: Destination ``*_sparse.jsonl`` path.
+    """
+    objects = [obj for chunk in chunks for obj in build_searchable_objects(chunk)]
+    JsonlSearchableObjectRepository(output_path).replace(objects)
 
 
 async def process_document(file_path: str):
@@ -77,6 +93,7 @@ async def process_document(file_path: str):
 
     index_path = output_dir / f"{file_path.stem}_index_new.jsonl"
     docstore_path = output_dir / f"{file_path.stem}_docstore_new.jsonl"
+    sparse_path = output_dir / f"{file_path.stem}_sparse.jsonl"
 
     with (
         open(index_path, "w", encoding="utf-8") as f_idx,
@@ -113,7 +130,10 @@ async def process_document(file_path: str):
                 + "\n"
             )
 
+    write_searchable_objects(enriched_chunks, sparse_path)
+
     logger.info(f"Workflow complete! Files saved to {output_dir}")
+    logger.info(f"Lexical search objects saved to {sparse_path}")
     logger.info(f"Total time: {time.time() - start_time:.2f}s")
 
 

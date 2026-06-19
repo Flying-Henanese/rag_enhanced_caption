@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 
 from llama_index.core import VectorStoreIndex, Settings
 from llama_index.core.schema import (
+    BaseNode,
     TextNode,
     IndexNode,
     NodeWithScore,
@@ -22,6 +23,13 @@ from llama_index.core.retrievers import RecursiveRetriever
 from llama_index.core.storage.docstore import SimpleDocumentStore
 from llama_index.core import StorageContext
 from llama_index.core.retrievers import AutoMergingRetriever, BaseRetriever
+from rag_enhanced_caption.integrations.llama_index.hybrid_retriever import (
+    HybridRetriever,
+)
+from rag_enhanced_caption.lexical_search.bm25 import InMemoryBM25Backend
+from rag_enhanced_caption.lexical_search.repository import (
+    JsonlSearchableObjectRepository,
+)
 
 from rag_enhanced_caption.integrations.llama_index import (
     ShortContextExpandingRetriever,
@@ -37,6 +45,7 @@ class SiliconFlowRerank(BaseNodePostprocessor):
     endpoint: str = Field(default="https://api.siliconflow.cn/v1/rerank")
     model: str = Field(default="Pro/BAAI/bge-reranker-v2-m3")
     top_n: int = Field(default=2)
+    timeout: float = Field(default=30.0)
 
     def _postprocess_nodes(
         self,
@@ -59,7 +68,12 @@ class SiliconFlowRerank(BaseNodePostprocessor):
         }
 
         try:
-            response = requests.post(self.endpoint, json=payload, headers=headers)
+            response = requests.post(
+                self.endpoint,
+                json=payload,
+                headers=headers,
+                timeout=self.timeout,
+            )
             response.raise_for_status()
             data = response.json()
             results = data.get("results", [])
@@ -71,6 +85,9 @@ class SiliconFlowRerank(BaseNodePostprocessor):
                 new_nodes.append(nodes[idx])
             new_nodes.sort(key=lambda x: x.score or 0.0, reverse=True)
             return new_nodes[: self.top_n]
+        except requests.Timeout:
+            logger.warning(f"Rerank request timed out after {self.timeout} seconds")
+            return nodes[: self.top_n]
         except Exception as e:
             logger.error(f"Rerank failed: {e}")
             return nodes[: self.top_n]
@@ -101,6 +118,35 @@ RESOURCE_DIR = Path("test_resource")
 OUTPUT_DIR = Path("output")
 DOCSTORE_PATH = OUTPUT_DIR / "rag-anything_docstore_new.jsonl"
 INDEX_PATH = OUTPUT_DIR / "rag-anything_index_new.jsonl"
+SPARSE_PATH = OUTPUT_DIR / "rag-anything_sparse.jsonl"
+
+
+def build_candidate_retriever(
+    vector_retriever: BaseRetriever,
+    leaf_nodes: list[BaseNode],
+    sparse_path: Path,
+) -> BaseRetriever:
+    """Build vector-only or hybrid candidates depending on sparse data.
+
+    Args:
+        vector_retriever: Existing embedding-based leaf retriever.
+        leaf_nodes: Nodes addressable by IDs stored in searchable objects.
+        sparse_path: Persisted searchable object JSONL path.
+
+    Returns:
+        A hybrid retriever when searchable objects exist, otherwise the original
+        vector retriever.
+    """
+    searchable_objects = JsonlSearchableObjectRepository(sparse_path).load()
+    if not searchable_objects:
+        return vector_retriever
+    lexical_backend = InMemoryBM25Backend(searchable_objects)
+    return HybridRetriever(
+        vector_retriever=vector_retriever,
+        lexical_backend=lexical_backend,
+        node_by_id={node.node_id: node for node in leaf_nodes},
+        lexical_top_k=15,
+    )
 
 
 def _link_content_nodes_in_order(nodes: List[TextNode]) -> None:
@@ -304,11 +350,14 @@ def get_advanced_components():
 
     vector_index = VectorStoreIndex(leaf_nodes, storage_context=storage_context)
     vector_retriever = vector_index.as_retriever(similarity_top_k=15)
+    candidate_retriever = build_candidate_retriever(
+        vector_retriever, leaf_nodes, SPARSE_PATH
+    )
 
     # 递归回表检索器
     recursive_retriever = RecursiveRetriever(
-        "vector",
-        retriever_dict={"vector": vector_retriever},
+        "candidate",
+        retriever_dict={"candidate": candidate_retriever},
         node_dict=storage_context.docstore.docs,
     )
 
