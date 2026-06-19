@@ -23,6 +23,10 @@ from llama_index.core.storage.docstore import SimpleDocumentStore
 from llama_index.core import StorageContext
 from llama_index.core.retrievers import AutoMergingRetriever, BaseRetriever
 
+from rag_enhanced_caption.integrations.llama_index import (
+    ShortContextExpandingRetriever,
+)
+
 load_dotenv()
 logger.remove()
 logger.add(sys.stderr, level="WARNING")
@@ -95,8 +99,23 @@ if embed_model_name:
 
 RESOURCE_DIR = Path("test_resource")
 OUTPUT_DIR = Path("output")
-DOCSTORE_PATH = OUTPUT_DIR / "docstore_new.jsonl"
-INDEX_PATH = OUTPUT_DIR / "index_new.jsonl"
+DOCSTORE_PATH = OUTPUT_DIR / "rag-anything_docstore_new.jsonl"
+INDEX_PATH = OUTPUT_DIR / "rag-anything_index_new.jsonl"
+
+
+def _link_content_nodes_in_order(nodes: List[TextNode]) -> None:
+    """Link consecutive content nodes when they share a section path."""
+    for previous, current in zip(nodes, nodes[1:]):
+        if previous.metadata.get("section_path") != current.metadata.get(
+            "section_path"
+        ):
+            continue
+        previous.relationships[NodeRelationship.NEXT] = RelatedNodeInfo(
+            node_id=current.node_id
+        )
+        current.relationships[NodeRelationship.PREVIOUS] = RelatedNodeInfo(
+            node_id=previous.node_id
+        )
 
 
 class RerankedRetriever(BaseRetriever):
@@ -119,6 +138,30 @@ class RerankedRetriever(BaseRetriever):
         return nodes
 
 
+def _build_auto_merging_retriever(
+    reranked_retriever: BaseRetriever,
+    storage_context: StorageContext,
+) -> AutoMergingRetriever:
+    """Compose post-rerank short-context expansion with AutoMerge."""
+    context_expanding_retriever = ShortContextExpandingRetriever(
+        base_retriever=reranked_retriever,
+        docstore=storage_context.docstore,
+        short_node_token_threshold=100,
+        previous_nodes=1,
+        next_nodes=1,
+        max_added_nodes=2,
+        max_expansion_tokens=512,
+        score_decay=0.85,
+        same_section=True,
+    )
+    return AutoMergingRetriever(
+        context_expanding_retriever,
+        storage_context,
+        verbose=True,
+        simple_ratio_thresh=0.5,
+    )
+
+
 def get_advanced_components():
     """
     基于生成好的 JSONL 构建 LlamaIndex 检索树。
@@ -126,6 +169,7 @@ def get_advanced_components():
     docstore_nodes = {}
     path_nodes = {}
     leaf_nodes = []
+    content_nodes_in_order = []
 
     # 1. 加载数据
     doc_records = {}
@@ -180,7 +224,11 @@ def get_advanced_components():
             node = TextNode(
                 id_=chunk_id,
                 text=text_for_embed,
-                metadata={"type": "chunk", "full_content": doc_data["full_content"]},
+                metadata={
+                    "type": "chunk",
+                    "full_content": doc_data["full_content"],
+                    "section_path": header_path,
+                },
             )
             if current_parent_node_id:
                 node.relationships[NodeRelationship.PARENT] = RelatedNodeInfo(
@@ -192,6 +240,7 @@ def get_advanced_components():
 
             docstore_nodes[chunk_id] = node
             leaf_nodes.append(node)
+            content_nodes_in_order.append(node)
             node_id_map[chunk_id] = chunk_id
 
         else:
@@ -199,7 +248,7 @@ def get_advanced_components():
             element_node = TextNode(
                 id_=f"{chunk_id}_full",
                 text=doc_data["full_content"],
-                metadata={"type": "element"},
+                metadata={"type": "element", "section_path": header_path},
             )
             docstore_nodes[element_node.id_] = element_node
 
@@ -228,7 +277,10 @@ def get_advanced_components():
             )
             docstore_nodes[index_node.id_] = index_node
             leaf_nodes.append(index_node)
+            content_nodes_in_order.append(element_node)
             node_id_map[chunk_id] = element_node.id_
+
+    _link_content_nodes_in_order(content_nodes_in_order)
 
     # c. 聚合章节文本
     sorted_paths = sorted(
@@ -277,8 +329,9 @@ def get_advanced_components():
     )
 
     # 上下文合并检索器
-    auto_merging_retriever = AutoMergingRetriever(
-        reranked_retriever, storage_context, verbose=True, simple_ratio_thresh=0.5
+    auto_merging_retriever = _build_auto_merging_retriever(
+        reranked_retriever,
+        storage_context,
     )
 
     return vector_retriever, auto_merging_retriever, reranker

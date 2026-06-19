@@ -4,6 +4,13 @@ from pathlib import Path
 
 import dotenv
 import pytest
+from llama_index.core import StorageContext
+from llama_index.core.schema import TextNode
+from llama_index.core.storage.docstore import SimpleDocumentStore
+
+from rag_enhanced_caption.integrations.llama_index import (
+    ShortContextExpandingRetriever,
+)
 
 
 dotenv.load_dotenv()
@@ -15,6 +22,56 @@ spec = importlib.util.spec_from_file_location("advanced_rag_example", MODULE_PAT
 advanced_rag = importlib.util.module_from_spec(spec)
 assert spec and spec.loader
 spec.loader.exec_module(advanced_rag)
+
+
+def test_advanced_example_targets_rag_anything_artifacts() -> None:
+    assert advanced_rag.INDEX_PATH.name == "rag-anything_index_new.jsonl"
+    assert advanced_rag.DOCSTORE_PATH.name == "rag-anything_docstore_new.jsonl"
+
+
+def test_link_content_nodes_in_order_stays_within_section() -> None:
+    paragraph = TextNode(
+        id_="paragraph",
+        text="正文",
+        metadata={"type": "chunk", "section_path": ["章节 A"]},
+    )
+    table = TextNode(
+        id_="table",
+        text="表格",
+        metadata={"type": "element", "section_path": ["章节 A"]},
+    )
+    next_section = TextNode(
+        id_="next-section",
+        text="下一章节",
+        metadata={"type": "chunk", "section_path": ["章节 B"]},
+    )
+
+    advanced_rag._link_content_nodes_in_order([paragraph, table, next_section])
+
+    assert paragraph.next_node is not None
+    assert paragraph.next_node.node_id == table.node_id
+    assert table.prev_node is not None
+    assert table.prev_node.node_id == paragraph.node_id
+    assert table.next_node is None
+    assert next_section.prev_node is None
+
+
+def test_context_expansion_pipeline_wraps_reranked_retriever() -> None:
+    docstore = SimpleDocumentStore()
+    storage_context = StorageContext.from_defaults(docstore=docstore)
+    reranked = advanced_rag.RerankedRetriever(
+        base_retriever=object(),
+        reranker=None,
+    )
+
+    auto_merging = advanced_rag._build_auto_merging_retriever(
+        reranked,
+        storage_context,
+    )
+
+    expanding = auto_merging._vector_retriever
+    assert isinstance(expanding, ShortContextExpandingRetriever)
+    assert expanding.base_retriever is reranked
 
 
 def test_advanced_retrieval_pipeline_real_components():
