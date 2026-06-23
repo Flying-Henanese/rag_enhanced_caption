@@ -39,8 +39,12 @@ class MarkdownMultimodalProcessor:
         if image_resolver is None:
             image_resolver = create_image_resolver(base_dir)
 
-        # 构建 ID 到 Chunk 的映射，方便查找 Parent 上下文
-        chunk_map = {chunk["id"]: chunk for chunk in chunks}
+        # 构建 ID 到 Chunk 的映射，方便查找 Parent 上下文。
+        # 注意：parent_id 存的是父文本块在语义块列表中的序号（见 chunker，
+        # parent_id = str(last_text_idx)），它与 chunk["id"]（f"{file_id}_chunk_{idx}"）
+        # 不是同一命名空间。该序号等于每条记录的 metadata["chunk_index"]，
+        # 故这里用 chunk_index 作键，parent_id 才能查得到（原先用 chunk["id"] 永远查不到）。
+        chunk_map = {str(chunk["metadata"].get("chunk_index")): chunk for chunk in chunks}
         tasks = []
 
         for chunk in chunks:
