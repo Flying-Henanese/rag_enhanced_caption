@@ -284,7 +284,8 @@ src/rag_enhanced_caption/
 │   ├── repository.py
 │   └── schema.py
 └── integrations/llama_index/
-    └── hybrid_retriever.py
+    ├── hybrid_retriever.py
+    └── retrievers.py
 ```
 
 ## 测试覆盖

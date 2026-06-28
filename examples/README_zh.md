@@ -14,7 +14,7 @@
 - 进行语义分块
 - 清洗空块并修复父子关系
 - 调用 VLM 为图片、表格等多模态内容生成增强描述
-- 输出两份 JSONL 文件
+- 输出面向向量、docstore 和 BM25 检索的 JSONL 文件
 
 默认输入文件是：
 
@@ -33,26 +33,28 @@ output/
 ```text
 output/<输入文件名>_index_new.jsonl
 output/<输入文件名>_docstore_new.jsonl
+output/<输入文件名>_sparse.jsonl
 ```
 
 其中：
 
 - `*_index_new.jsonl`：保存用于 embedding 和向量检索的精简文本
 - `*_docstore_new.jsonl`：保存完整 Markdown 内容、标题路径、父子关系和元素类型
+- `*_sparse.jsonl`：保存 backend-neutral searchable objects，供 BM25 / 关键词召回使用
 
 ### 2. llama_index_advanced_rag.py
 
-这个脚本负责读取上一步生成的 JSONL 文件，并转换成 LlamaIndex 可以使用的数据结构。
+这个脚本负责读取上一步生成的 JSONL 文件，并转换成 LlamaIndex 可以使用的数据结构和混合检索组件。
 
 它会完成：
 
-- 读取 `*_index_new.jsonl` 和 `*_docstore_new.jsonl`
+- 读取 `*_index_new.jsonl`、`*_docstore_new.jsonl` 和可选的 `*_sparse.jsonl`
 - 将普通文本块转换为 LlamaIndex `TextNode`
 - 将图片、表格等多模态块转换为 `IndexNode` 和完整内容节点
 - 根据 `header_path` 构建章节父子关系
 - 使用 `SimpleDocumentStore` 保存完整节点图
 - 使用 `VectorStoreIndex` 建立向量索引
-- 使用 `RecursiveRetriever`、可选 rerank、`AutoMergingRetriever` 进行召回和上下文合并
+- 使用 vector top-k + BM25 top-k、RRF、`RecursiveRetriever`、可选 rerank、短上下文扩展和 `AutoMergingRetriever` 进行召回和上下文合并
 
 需要注意：这个脚本目前是检索演示，不是完整问答系统。它只会召回最相关的一些上下文节点并打印出来，不会调用 LLM 生成最终答案。
 
@@ -133,6 +135,7 @@ test_resource/paddleocr.md
 ```text
 output/paddleocr_index_new.jsonl
 output/paddleocr_docstore_new.jsonl
+output/paddleocr_sparse.jsonl
 ```
 
 ### 第二步：运行 LlamaIndex 检索示例
@@ -142,6 +145,7 @@ output/paddleocr_docstore_new.jsonl
 ```text
 output/rag-anything_index_new.jsonl
 output/rag-anything_docstore_new.jsonl
+output/rag-anything_sparse.jsonl
 ```
 
 因此，如果想直接运行第二个脚本，需要先让第一个脚本处理 `test_resource/rag-anything.md`。
@@ -169,6 +173,7 @@ uv run python examples\data_ingestion_pipeline.py
 ```text
 output/rag-anything_index_new.jsonl
 output/rag-anything_docstore_new.jsonl
+output/rag-anything_sparse.jsonl
 ```
 
 之后运行：
@@ -215,6 +220,25 @@ uv run python examples\llama_index_advanced_rag.py
 ```
 
 这部分主要用于保存完整内容和上下文结构。
+
+### sparse 文件
+
+`*_sparse.jsonl` 示例结构：
+
+```json
+{
+  "id": "stable-field-id",
+  "owner_node_id": "chunk_id",
+  "searchable_text": "项目：MiniRAG；描述：...",
+  "field_type": "table_row",
+  "metadata": {
+    "row_index": 2
+  },
+  "schema_version": 1
+}
+```
+
+这部分主要用于 BM25 / 关键词召回。`owner_node_id` 会映射回同一批 LlamaIndex node ID，因此 BM25 和向量召回最终仍然共用 docstore 中的完整内容。
 
 ### 普通文本块
 
@@ -263,7 +287,7 @@ index_node = IndexNode(
 
 `header_path` 会被转换成章节聚合节点，并通过 LlamaIndex 的 `NodeRelationship.PARENT` 和 `NodeRelationship.CHILD` 建立层级关系。
 
-这些关系会被 `AutoMergingRetriever` 使用，用于在召回后自动合并更完整的上下文。
+这些关系会被短上下文扩展和 `AutoMergingRetriever` 使用，用于在召回后补齐相邻短节点，并自动合并更完整的上下文。
 
 ## 常见问题
 
@@ -276,6 +300,7 @@ index_node = IndexNode(
 ```text
 output/rag-anything_index_new.jsonl
 output/rag-anything_docstore_new.jsonl
+output/rag-anything_sparse.jsonl
 ```
 
 如果第一步处理的是 `paddleocr.md`，则实际生成的是：
@@ -283,9 +308,10 @@ output/rag-anything_docstore_new.jsonl
 ```text
 output/paddleocr_index_new.jsonl
 output/paddleocr_docstore_new.jsonl
+output/paddleocr_sparse.jsonl
 ```
 
-解决方法是让两个脚本使用同一个输入文件前缀，或者修改 `llama_index_advanced_rag.py` 中的 `DOCSTORE_PATH` 和 `INDEX_PATH`。
+解决方法是让两个脚本使用同一个输入文件前缀，或者修改 `llama_index_advanced_rag.py` 中的 `DOCSTORE_PATH`、`INDEX_PATH` 和 `SPARSE_PATH`。
 
 ### 第二个脚本会生成答案吗？
 

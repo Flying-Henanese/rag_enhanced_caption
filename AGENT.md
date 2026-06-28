@@ -23,6 +23,12 @@ This document provides foundational guidance and architectural mandates for the 
 
 ## 🔄 Workflows
 
+- **Harness Context Routing**:
+  - Before broad project work, read `.harness/README.md` and the relevant files in `.harness/context/`.
+  - Read `.harness/context/project-overview.md` when the task touches project structure, module ownership, package layout, dependencies, or where to start reading.
+  - Read `.harness/context/artifact-contracts.md` before changing CLI outputs, example outputs, JSONL schemas, `text_for_embedding`, docstore fields, or sparse searchable objects.
+  - Read `.harness/context/retrieval-pipeline.md` before changing BM25, hybrid retrieval, RRF, rerank, short-context expansion, AutoMerge, or LlamaIndex example wiring.
+  - After changing source docs such as `README.md`, `README_zh.md`, `examples/README_zh.md`, or this file, update the matching harness context file if the project facts changed.
 - **Testing**:
   - Always run Python commands through `uv run` (for example, `uv run python ...`) to ensure the correct project environment is used.
   - Run the functional test script: `uv run python tests/test_processor.py`.
