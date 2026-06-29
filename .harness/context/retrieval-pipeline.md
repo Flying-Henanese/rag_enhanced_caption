@@ -42,12 +42,20 @@ mechanisms. Keep their boundaries clear:
   names, and exact terms that semantic summaries may weaken.
 - RRF fusion: combines vector and BM25 rankings by rank position. It does not
   compare raw vector scores with raw BM25 scores.
+- Cleaning and relinking before indexing: `examples/data_ingestion_pipeline.py`
+  runs `compress_and_relink_chunks` after semantic chunking. This removes
+  cleaned-empty chunks, keeps cleaned content, repairs `parent_id` links through
+  deleted chunks, and corrects pure image blocks. It does not physically merge
+  short chunks with neighbors.
 - Recursive retrieval: follows `IndexNode.index_id` from embedding-facing
   multimodal nodes to full content nodes.
 - Rerank: optionally reorders candidate nodes before broader context expansion.
   Missing rerank credentials should not break retrieval.
-- Short-context expansion: adds nearby short nodes after rerank when structural
-  relationships and section constraints allow it.
+- Short-context expansion: query-time expansion only. After rerank,
+  `ShortContextExpandingRetriever` expands short eligible chunk hits by
+  following same-section `PREVIOUS` and `NEXT` relationships. The example
+  expands up to one previous and one next node, with `max_added_nodes=2` and
+  `max_expansion_tokens=512`.
 - AutoMerge: uses parent-child relationships to merge a sufficient set of child
   hits into broader parent context.
 
@@ -91,37 +99,17 @@ retrievers = mapping, ranking, and expansion logic
 
 ## LlamaIndex Mapping
 
-Normal text chunks become `TextNode` instances:
+Normal text chunks map directly to `TextNode` records: `text_for_embedding`
+drives vector recall, while `full_content` stays available in metadata/docstore
+for answer context.
 
-```python
-TextNode(
-    id_=chunk_id,
-    text=text_for_embedding,
-    metadata={"type": "chunk", "full_content": full_content},
-)
-```
+Multimodal chunks such as images and tables use two nodes: an `IndexNode` with
+`text_for_embedding` for vector recall, and a full `TextNode` containing
+`full_content`. `IndexNode.index_id` points to the full node, and
+`RecursiveRetriever` follows that link after recall.
 
-Images, tables, and other multimodal elements use an index node plus a full
-content node:
-
-```python
-element_node = TextNode(
-    id_=f"{chunk_id}_full",
-    text=full_content,
-    metadata={"type": "element"},
-)
-```
-
-```python
-index_node = IndexNode(
-    id_=chunk_id,
-    text=text_for_embedding,
-    index_id=element_node.id_,
-)
-```
-
-The index node participates in vector retrieval. `RecursiveRetriever` can then
-jump to the complete content node.
+When a hit returns only a summary, inspect the `IndexNode.index_id` mapping, the
+docstore full node, and `RecursiveRetriever` wiring.
 
 ## Relationship Signals
 

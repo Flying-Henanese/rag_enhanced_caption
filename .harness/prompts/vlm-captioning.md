@@ -1,6 +1,6 @@
 # VLM Captioning Prompt Notes
 
-Sources: `README.md`, `README_zh.md`, `AGENT.md`
+Sources: `README.md`, `README_zh.md`, `AGENTS.md`
 
 Use this file when adjusting or reviewing prompts for multimodal enrichment.
 The live prompt implementation is in `src/rag_enhanced_caption/enhancer/prompts.py`.
@@ -28,4 +28,3 @@ The live prompt implementation is in `src/rag_enhanced_caption/enhancer/prompts.
 - Does it avoid hallucinating unseen values?
 - Is the response format compatible with the parser?
 - Does the enriched output keep Markdown rendering valid?
-

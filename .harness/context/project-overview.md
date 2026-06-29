@@ -1,6 +1,6 @@
 # Project Overview
 
-Sources: `README.md`, `README_zh.md`, `AGENT.md`
+Sources: `README.md`, `README_zh.md`, `AGENTS.md`
 
 `rag-enhanced-caption` is a lightweight Python toolkit for last-mile processing
 of parsed Markdown before RAG ingestion. It assumes an upstream system has

@@ -4,7 +4,7 @@ This directory keeps project context, reusable prompts, checklists, designs,
 plans, and run records for `rag-enhanced-caption`.
 
 The harness is intentionally lightweight. It does not replace source code,
-tests, `README.md`, `README_zh.md`, `examples/README_zh.md`, or `AGENT.md`.
+tests, `README.md`, `README_zh.md`, `examples/README_zh.md`, or `AGENTS.md`.
 Instead, it provides a stable working layer for agents and humans who need to
 make changes without rediscovering the same project facts.
 
@@ -21,7 +21,7 @@ make changes without rediscovering the same project facts.
 
 The initial harness content is distilled from:
 
-- `AGENT.md`: project-level engineering conventions and constraints.
+- `AGENTS.md`: project-level engineering conventions and constraints.
 - `README.md`: English project overview, usage, outputs, and retrieval notes.
 - `README_zh.md`: Chinese project overview, package structure, and testing notes.
 - `examples/README_zh.md`: end-to-end example workflow and LlamaIndex mapping.
@@ -45,7 +45,7 @@ When these source documents change materially, update the matching files under
 
 ## Context Recall Rules
 
-Use these rules whenever an agent starts from `AGENT.md`, this README, or a
+Use these rules whenever an agent starts from `AGENTS.md`, this README, or a
 fresh task description:
 
 - For "where is this implemented?", "what owns this?", package layout,

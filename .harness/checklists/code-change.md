@@ -1,8 +1,10 @@
 # Code Change Checklist
 
-Sources: `AGENT.md`, `README_zh.md`
+Sources: `AGENTS.md`, `README_zh.md`
 
-Use this before and after source changes.
+Use this as the execution checklist for source changes. `AGENTS.md` remains the
+authoritative rule source; this file focuses on when to read context, what to
+verify, and what to report before finishing.
 
 ## Before Editing
 
@@ -10,18 +12,29 @@ Use this before and after source changes.
 - Check current `git status --short`.
 - Read the nearest source file, test, and documentation section before changing
   code.
-- Identify whether the change affects CLI output, docstore schema, sparse
-  search schema, retrieval behavior, or prompt behavior.
 - If dependencies are needed, use `uv add` or optional dependency groups. Do not
   manually edit dependency lists or `uv.lock`.
 
+## Context Triggers
+
+- If the change touches project structure, module ownership, package layout, or
+  dependency placement, read `.harness/context/project-overview.md`.
+- If the change touches CLI output, docstore schema, sparse search schema,
+  `text_for_embedding`, JSONL fields, or output filenames, read
+  `.harness/context/artifact-contracts.md`.
+- If the change touches BM25, hybrid retrieval, RRF, rerank, context expansion,
+  AutoMerge, or LlamaIndex example wiring, read
+  `.harness/context/retrieval-pipeline.md`.
+- If the change updates coding conventions, dependency rules, async behavior,
+  logging, typing, or docstring expectations, update
+  `.harness/context/agent-guidelines.md` together with `AGENTS.md`.
+
 ## During Editing
 
-- Keep changes localized.
-- Preserve async behavior in VLM and processing pipelines.
-- Use `loguru`, not standard `logging`.
-- Add or update explicit type hints.
-- Update Google-style docstrings when changing public signatures.
+- Keep changes localized and tied to the requested behavior.
+- Preserve project constraints from `AGENTS.md`: async VLM/pipelines, `loguru`,
+  explicit type hints, Google-style docstrings, and dependency hygiene.
+- Update docstrings and tests when changing public signatures or behavior.
 - Keep Markdown injection balanced and renderable.
 
 ## Verification
@@ -44,3 +57,8 @@ uv run pytest
 uv run ruff check .
 ```
 
+## Completion
+
+- Run `git diff --check`.
+- Review the final diff for unrelated edits.
+- Report the tests/checks run and any checks that were skipped.

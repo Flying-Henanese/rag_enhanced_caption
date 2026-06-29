@@ -1,8 +1,8 @@
 # Agent Guidelines
 
-Source: `AGENT.md`
+Source: `AGENTS.md`
 
-This file distills project instructions for coding agents. Treat `AGENT.md` as
+This file distills project instructions for coding agents. Treat `AGENTS.md` as
 the authoritative source when details conflict.
 
 ## Development Environment
@@ -21,14 +21,32 @@ the authoritative source when details conflict.
 - Use explicit type hints for functions and methods.
 - Prefer Python 3.10+ built-in generics: `list[str]`, `dict[str, Any]`.
 - Prefer `str | None` over `Optional[str]`.
+- Prefer small helper functions over complex inline expressions or deeply nested
+  comprehension logic.
+- Use `dataclass`, `TypedDict`, or dedicated result objects for stable structured
+  data; avoid requiring callers to unpack more than three return values.
+- Avoid mutable default arguments. Use `None` plus explicit initialization and
+  docstring notes for dynamic defaults.
+- Avoid deeply nested dictionaries/lists for core data contracts; promote stable
+  shapes into typed objects or documented schemas.
 - Public classes and methods should use Google-style docstrings.
 
 ## Async and API Behavior
 
 - VLM calls and processing pipelines should remain async.
 - Account for network exceptions and timeouts when handling LLM/VLM API calls.
+- Keep `try` blocks narrow and prefer explicit exceptions over `None` for failure
+  paths unless the optional result is documented.
 - Log API call errors with `logger.exception` when a traceback is useful.
 - Use `robust_json_parse` for VLM output parsing.
+
+## Performance
+
+- Profile before optimizing.
+- Avoid caching, concurrency, batching, or complex algorithms without measured
+  bottlenecks or clear scale requirements.
+- Prefer streaming or iterator-based processing for large Markdown, JSONL,
+  docstore, and retrieval-candidate flows when practical.
 
 ## Scope Control
 
@@ -38,4 +56,3 @@ the authoritative source when details conflict.
   the same change.
 - Ensure injected Markdown blocks, especially `<details>`, are correctly closed
   and do not break rendering.
-
