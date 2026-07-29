@@ -44,7 +44,9 @@ class MarkdownMultimodalProcessor:
         # parent_id = str(last_text_idx)），它与 chunk["id"]（f"{file_id}_chunk_{idx}"）
         # 不是同一命名空间。该序号等于每条记录的 metadata["chunk_index"]，
         # 故这里用 chunk_index 作键，parent_id 才能查得到（原先用 chunk["id"] 永远查不到）。
-        chunk_map = {str(chunk["metadata"].get("chunk_index")): chunk for chunk in chunks}
+        chunk_map = {
+            str(chunk["metadata"].get("chunk_index")): chunk for chunk in chunks
+        }
         tasks = []
 
         for chunk in chunks:
