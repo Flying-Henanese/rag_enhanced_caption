@@ -10,6 +10,7 @@ Covers two bugs that silently broke the multimodal parent/child pipeline:
    while ``parent_id`` is a ``chunk_index``. The lookup ``parent_id in chunk_map`` was
    therefore always False, so captions were generated without parent context.
 """
+
 import asyncio
 from pathlib import Path
 
@@ -35,12 +36,15 @@ def test_build_record_child_parent_id_resolves_to_real_parent_id():
         "metadata": {"element_type": "Image", "parent_id": "0", "chunk_index": 1},
     }
 
-    _, parent_doc = _build_record(parent, Path("doc.md"))
-    _, child_doc = _build_record(child, Path("doc.md"))
+    parent_idx, parent_doc = _build_record(parent, Path("doc.md"))
+    child_idx, child_doc = _build_record(child, Path("doc.md"))
 
     # parent record gets the p_ prefix; child must point at that exact id.
     assert parent_doc["id"] == "p_doc_chunk_0"
     assert child_doc["parent_id"] == parent_doc["id"]
+    # index_record must also carry the resolved parent_id for downstream consumers.
+    assert child_idx["parent_id"] == parent_doc["id"]
+    assert parent_idx["parent_id"] is None
     # chunk_index is preserved as a bridging fallback.
     assert child_doc["metadata"]["chunk_index"] == 1
 
@@ -54,9 +58,10 @@ def test_build_record_text_chunk_has_no_parent():
         "text_for_embedding": "body",
         "metadata": {"element_type": "text", "parent_id": None, "chunk_index": 0},
     }
-    _, doc = _build_record(text_chunk, Path("doc.md"))
+    idx, doc = _build_record(text_chunk, Path("doc.md"))
     assert doc["type"] == "parent"
     assert doc["parent_id"] is None
+    assert idx["parent_id"] is None
 
 
 def test_enrich_chunks_finds_parent_context_via_chunk_index_key():

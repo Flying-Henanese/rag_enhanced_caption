@@ -74,8 +74,19 @@ def _build_record(
         "filename": chunk.get("filename"),
     }
 
+    # parent_id 命名空间修复: chunker 存的 parent_id 是父文本块的序号(chunk_index),
+    # 与记录 id(p_{file_id}_chunk_{n}) 不是同一命名空间,直接落盘会导致 child.parent_id
+    # 命中不了任何父记录。这里转成父记录的真实 id —— 父块一定是文本块,记录类型为
+    # parent,前缀固定 p_ —— 使 index / docstore 自洽、可直接回表 / AutoMerging。
+    raw_parent_id = meta.get("parent_id")
+    file_id = chunk.get("file_id")
+    resolved_parent_id = (
+        f"p_{file_id}_chunk_{raw_parent_id}" if raw_parent_id is not None else None
+    )
+
     index_record = {
         "id": rec_id,
+        "parent_id": resolved_parent_id,
         "text_for_embedding": text_for_embedding,
         "metadata": {
             "type": rec_type,
@@ -83,16 +94,6 @@ def _build_record(
             "element_type": element_type,
         },
     }
-
-    # parent_id 命名空间修复: chunker 存的 parent_id 是父文本块的序号(chunk_index),
-    # 与记录 id(p_{file_id}_chunk_{n}) 不是同一命名空间,直接落盘会导致 child.parent_id
-    # 命中不了任何父记录。这里转成父记录的真实 id —— 父块一定是文本块,记录类型为
-    # parent,前缀固定 p_ —— 使 docstore 自洽、可直接回表 / AutoMerging。
-    raw_parent_id = meta.get("parent_id")
-    file_id = chunk.get("file_id")
-    resolved_parent_id = (
-        f"p_{file_id}_chunk_{raw_parent_id}" if raw_parent_id is not None else None
-    )
 
     docstore_record = {
         "id": rec_id,
