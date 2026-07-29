@@ -6,7 +6,7 @@ import re
 import sys
 import time
 from pathlib import Path
-from typing import List, Dict, Any, Tuple
+from typing import Dict, Any, Tuple
 
 from dotenv import load_dotenv
 from loguru import logger
@@ -22,98 +22,99 @@ from rag_enhanced_caption.chunker.dispatcher import (
 load_dotenv(dotenv_path=Path.cwd() / ".env")
 load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env")
 
-# --- 正则匹配模式 ---
-_IMAGE_ANALYSIS_RE = re.compile(r"<image_analysis>(.*?)</image_analysis>", re.DOTALL)
-_ENTITY_RE = re.compile(r"-\s+\*\*关键实体\*\*:\s*(.*)")
-_SUMMARY_RE = re.compile(r"-\s+\*\*简短摘要\*\*:\s*(.*)")
-_CORE_RE = re.compile(r"-\s+\*\*核心总结\*\*:\s*(.*)")
-_HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
+# 文本类元素类型(其余如 Image / Table / Table KV / html_block 视为多模态)
+_TEXT_ELEMENT_TYPES = {"text", "", None}
 
 
-def _extract_metadata_from_analysis(analysis_body: str) -> Dict[str, Any]:
-    """从 AI 分析块中提取结构化元数据"""
-    entities = []
-    ent_match = _ENTITY_RE.search(analysis_body)
-    if ent_match:
-        entities = [e.strip() for e in ent_match.group(1).split(",") if e.strip()]
+def _build_record(
+    chunk: Dict[str, Any], source_file: Path
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """将一个已增强的语义块转换为 (index 记录, docstore 记录)。
 
-    sum_match = _SUMMARY_RE.search(analysis_body)
-    summary = sum_match.group(1).strip() if sum_match else ""
+    直接采用 chunker + VLM 增强后写入的 ``text_for_embedding``:
+    - 文本块:即其纯文本内容
+    - 图片 / 表格等多模态块:即 VLM 生成的语义摘要(+ 关键词)
+    这样多模态语义才能真正进入向量索引,而不是只剩一个图片路径。
 
-    core_match = _CORE_RE.search(analysis_body)
-    ai_core_summary = core_match.group(1).strip() if core_match else ""
+    Args:
+        chunk: chunker 产出、经 ``MarkdownMultimodalProcessor`` 增强后的块。
+        source_file: 源 Markdown 文件路径,用于回填 source。
 
-    return {
-        "entities": entities,
-        "summary": summary,
-        "ai_core_summary": ai_core_summary,
-    }
-
-
-def _build_hierarchical_records(
-    chunk_record: Dict[str, Any], source_file: Path
-) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+    Returns:
+        一个二元组 ``(index_record, docstore_record)``。
     """
-    将一个语义块拆分为一个父块(Parent)和多个多模态子块(Children)。
-    """
-    content = chunk_record.get("content", "")
-    base_id = chunk_record.get("id", hashlib.md5(content.encode()).hexdigest()[:12])
+    content = chunk.get("content", "")
+    base_id = chunk.get("id") or hashlib.md5(content.encode()).hexdigest()[:12]
+    meta = chunk.get("metadata", {}) or {}
+    element_type = meta.get("element_type", "text")
 
-    # 1. 提取所有 AI 分析块
-    analysis_blocks = _IMAGE_ANALYSIS_RE.findall(content)
-    # 2. 提取所有图片 URL (用于关联)
-    image_urls = re.findall(r"!\[.*?\]\((.*?)\)", content)
+    is_multimodal = element_type not in _TEXT_ELEMENT_TYPES
+    rec_type = "child" if is_multimodal else "parent"
+    rec_id = f"{'c_' if is_multimodal else 'p_'}{base_id}"
 
-    # 生成 Parent 记录
-    content_clean = _IMAGE_ANALYSIS_RE.sub("", content)
-    content_clean = re.sub(
-        r"<details>.*?</details>", "", content_clean, flags=re.DOTALL
-    ).strip()
+    # 关键:使用增强阶段写好的 text_for_embedding(多模态=VLM 摘要),
+    # 而不是从 content 里重新抠;为空时退回原文,保证不丢内容。
+    text_for_embedding = chunk.get("text_for_embedding") or content
 
-    parent_id = f"p_{base_id}"
+    image_url = None
+    if is_multimodal:
+        url_match = re.search(r"!\[.*?\]\((.*?)\)", content)
+        if url_match:
+            image_url = url_match.group(1)
+
+    # 图片的 content 只是 ![](路径),回表后没有文字可用(检索/重排会把图片误杀)。
+    # 故图片的 full_content 拼上 VLM 摘要,让回表有文字表示(图片的唯一文字就是 caption)。
+    full_content = content
+    if element_type == "Image" and text_for_embedding and text_for_embedding != content:
+        full_content = f"{content}\n\n{text_for_embedding}"
+
     common_metadata = {
         "source": source_file.name,
-        "file_id": chunk_record.get("file_id"),
-        "filename": chunk_record.get("filename"),
+        "file_id": chunk.get("file_id"),
+        "filename": chunk.get("filename"),
     }
 
-    parent_record = {
-        "id": parent_id,
-        "type": "parent",
-        "parent_id": None,
-        "text_for_embedding": content_clean,  # 仅基于原文文本
-        "full_content": content,  # 包含完整 AI 注释的原文
-        "metadata": {**common_metadata, "chunk_type": "text"},
+    # parent_id 命名空间修复: chunker 存的 parent_id 是父文本块的序号(chunk_index),
+    # 与记录 id(p_{file_id}_chunk_{n}) 不是同一命名空间,直接落盘会导致 child.parent_id
+    # 命中不了任何父记录。这里转成父记录的真实 id —— 父块一定是文本块,记录类型为
+    # parent,前缀固定 p_ —— 使 index / docstore 自洽、可直接回表 / AutoMerging。
+    raw_parent_id = meta.get("parent_id")
+    file_id = chunk.get("file_id")
+    resolved_parent_id = (
+        f"p_{file_id}_chunk_{raw_parent_id}" if raw_parent_id is not None else None
+    )
+
+    index_record = {
+        "id": rec_id,
+        "parent_id": resolved_parent_id,
+        "text_for_embedding": text_for_embedding,
+        "metadata": {
+            "type": rec_type,
+            "source": source_file.name,
+            "element_type": element_type,
+        },
     }
 
-    # 生成 Children 记录
-    child_records = []
-    for i, analysis_body in enumerate(analysis_blocks):
-        child_id = f"c_{base_id}_{i}"
-        meta = _extract_metadata_from_analysis(analysis_body)
+    docstore_record = {
+        "id": rec_id,
+        "type": rec_type,
+        "parent_id": resolved_parent_id,
+        "text_for_embedding": text_for_embedding,
+        "full_content": full_content,
+        "header_path": meta.get("header_path", []),
+        "element_type": element_type,
+        "entities": meta.get("entities", []),
+        "metadata": {
+            **common_metadata,
+            "chunk_type": "multimodal" if is_multimodal else "text",
+            "element_type": element_type,
+            "image_url": image_url,
+            # 保留语义块序号,作为 parent_id 之外的桥接备份(可按需用它反查父块)。
+            "chunk_index": meta.get("chunk_index"),
+        },
+    }
 
-        # 关联图片 URL (如果能对上的话)
-        url = image_urls[i] if i < len(image_urls) else "unknown"
-
-        child_records.append(
-            {
-                "id": child_id,
-                "parent_id": parent_id,  # 核心关联：指向父块
-                "type": "child",
-                "text_for_embedding": meta["summary"],  # 仅基于 AI 摘要，避免噪声
-                "full_content": f"![image]({url})\n\n{analysis_body}",
-                "metadata": {
-                    **common_metadata,
-                    "chunk_type": "multimodal",
-                    "image_url": url,
-                    "entities": meta["entities"],
-                    "ai_summary": meta["summary"],
-                    "ai_core_summary": meta["ai_core_summary"],
-                },
-            }
-        )
-
-    return parent_record, child_records
+    return index_record, docstore_record
 
 
 async def process_document(file_path: Path, output_dir: Path):
@@ -168,52 +169,17 @@ async def process_document(file_path: Path, output_dir: Path):
         for idx, chunk in enumerate(chunks):
             logger.info(f"Processing chunk {idx + 1}/{len(chunks)}...")
 
-            # 当前增强流程写入 text_for_embedding，保留原始 content
+            # 增强阶段已写入 text_for_embedding，content 保留原始 Markdown
             enriched_text = chunk["content"]
 
-            # 拆分父子记录
-            parent, children = _build_hierarchical_records(chunk, file_path)
+            # 每个语义块直接落一条记录(多模态块携带 VLM 摘要)
+            index_record, docstore_record = _build_record(chunk, file_path)
 
             # 写入增强后的完整 Markdown (预览用)
             f_md.write(enriched_text + "\n\n---\n\n")
 
-            # 处理 Parent
-            f_idx.write(
-                json.dumps(
-                    {
-                        "id": parent["id"],
-                        "text_for_embedding": parent["text_for_embedding"],
-                        "metadata": {
-                            "type": "parent",
-                            "source": parent["metadata"]["source"],
-                        },
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
-
-            f_doc.write(json.dumps(parent, ensure_ascii=False) + "\n")
-
-            # 处理 Children
-            for child in children:
-                f_idx.write(
-                    json.dumps(
-                        {
-                            "id": child["id"],
-                            "parent_id": child["parent_id"],
-                            "text_for_embedding": child["text_for_embedding"],
-                            "metadata": {
-                                "type": "child",
-                                "source": child["metadata"]["source"],
-                            },
-                        },
-                        ensure_ascii=False,
-                    )
-                    + "\n"
-                )
-
-                f_doc.write(json.dumps(child, ensure_ascii=False) + "\n")
+            f_idx.write(json.dumps(index_record, ensure_ascii=False) + "\n")
+            f_doc.write(json.dumps(docstore_record, ensure_ascii=False) + "\n")
 
     logger.info(f"Workflow complete! Files saved to: {output_dir}")
     logger.info("Generated:")
