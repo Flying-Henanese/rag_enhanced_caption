@@ -1,4 +1,5 @@
 import asyncio
+import argparse
 import json
 import sys
 import time
@@ -29,6 +30,7 @@ from rag_enhanced_caption.lexical_search.builder import build_searchable_objects
 from rag_enhanced_caption.lexical_search.repository import (  # noqa: E402
     JsonlSearchableObjectRepository,
 )
+from examples.paddleocr_pdf_ocr import ocr_pdf_to_markdown  # noqa: E402
 
 
 def write_searchable_objects(chunks: list[dict[str, Any]], output_path: Path) -> None:
@@ -42,19 +44,41 @@ def write_searchable_objects(chunks: list[dict[str, Any]], output_path: Path) ->
     JsonlSearchableObjectRepository(output_path).replace(objects)
 
 
-async def process_document(file_path: str):
+async def process_document(
+    file_path: str | Path,
+    use_ocr: bool = False,
+    ocr_output_dir: Path | None = None,
+    include_ocr_page_images: bool = False,
+) -> None:
     """
     Parent-Child 模式文档处理流水线（结构化新版）：
-    1. 语义分块（输出干净的元数据，不使用丑陋的正则）。
-    2. 清洗与过滤（提早剔除空块，重塑上下文关联）。
-    3. VLM 增强描述（多模态隔离存储）。
-    4. 模拟落地存储格式。
+    1. 可选地将 PDF 逐页 OCR 为 Markdown。
+    2. 语义分块（输出干净的元数据，不使用丑陋的正则）。
+    3. 清洗与过滤（提早剔除空块，重塑上下文关联）。
+    4. VLM 增强描述（多模态隔离存储）。
+    5. 模拟落地存储格式。
+
+    Args:
+        file_path: Markdown input, or a PDF when ``use_ocr`` is enabled.
+        use_ocr: Convert the input PDF to Markdown before ingestion.
+        ocr_output_dir: Directory for intermediate OCR Markdown. Defaults to
+            ``output/ocr``.
+        include_ocr_page_images: Link retained page images in the OCR Markdown
+            so the existing multimodal enhancer can process them.
     """
     start_time = time.time()
     file_path = Path(file_path)
     if not file_path.exists():
         logger.error(f"File not found: {file_path}")
         return
+
+    if use_ocr:
+        logger.info("OCR enabled; converting PDF input to Markdown.")
+        file_path = await ocr_pdf_to_markdown(
+            file_path,
+            ocr_output_dir or root_dir / "output" / "ocr",
+            include_page_images=include_ocr_page_images,
+        )
 
     logger.info(f"Reading file: {file_path}")
     with open(file_path, "r", encoding="utf-8") as f:
@@ -138,5 +162,32 @@ async def process_document(file_path: str):
 
 
 if __name__ == "__main__":
-    TARGET_MD_FILE = "test_resource/paddleocr.md"
-    asyncio.run(process_document(TARGET_MD_FILE))
+    parser = argparse.ArgumentParser(
+        description="Generate RAG ingestion artifacts from Markdown or an OCR PDF."
+    )
+    parser.add_argument(
+        "--input", default="test_resource/paddleocr.md", help="Input Markdown or PDF."
+    )
+    parser.add_argument(
+        "--use-ocr", action="store_true", help="OCR the input PDF before ingestion."
+    )
+    parser.add_argument(
+        "--ocr-output-dir",
+        type=Path,
+        default=None,
+        help="OCR Markdown output directory.",
+    )
+    parser.add_argument(
+        "--include-page-images",
+        action="store_true",
+        help="Add OCR page images to Markdown for multimodal enhancement.",
+    )
+    args = parser.parse_args()
+    asyncio.run(
+        process_document(
+            args.input,
+            args.use_ocr,
+            args.ocr_output_dir,
+            args.include_page_images,
+        )
+    )

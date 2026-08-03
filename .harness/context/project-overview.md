@@ -21,6 +21,10 @@ The project focuses on three responsibilities:
 - `rag-caption` CLI for end-to-end Markdown processing.
 - Reusable Python modules under `src/rag_enhanced_caption/`.
 - Advanced ingestion and retrieval workflows under `examples/`.
+- An example-only, opt-in PDF-to-Markdown OCR adapter under `examples/` that
+  renders pages locally, retains them in a same-named asset directory, and
+  calls SiliconFlow PaddleOCR-VL asynchronously. Generated Markdown links to
+  those images only when explicitly requested for multimodal enrichment.
 - Tests for chunking, HTML cleaning, VLM enrichment, lexical search, and
   retrieval-related behavior.
 

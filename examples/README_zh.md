@@ -90,6 +90,28 @@ VLM_MODEL_NAME=你的视觉模型名称
 http://127.0.0.1:8000/v1/chat/completions
 ```
 
+### 可选 PDF OCR 配置
+
+`paddleocr_pdf_ocr.py` 和 `data_ingestion_pipeline.py --use-ocr` 使用硅基流动
+PaddleOCR-VL，将 PDF 先逐页渲染为图片，再异步转换为 Markdown。该能力不会改变
+默认 Markdown 入库流程。
+
+```env
+OCR_API_KEY=你的_api_key
+OCR_ENDPOINT=https://api.siliconflow.cn/v1/chat/completions
+OCR_MODEL_NAME=PaddlePaddle/PaddleOCR-VL-1.5
+OCR_MAX_CONCURRENCY=2
+OCR_TIMEOUT=120
+```
+
+需要在系统中安装 Poppler，以提供 `pdftoppm` 命令。例如 macOS 可执行
+`brew install poppler`。OCR 结果默认写入 `output/ocr/<PDF 文件名>.md`，渲染页图
+始终保存在同级的 `output/ocr/<PDF 文件名>/page-001.png` 等文件中。模型不会返回
+PDF 内嵌图片文件；这些图片是本地渲染的页面图。
+
+默认以 144 DPI 渲染页面，与 PaddleOCR 的 `fitz.Matrix(2, 2)` 默认渲染倍率一致；
+可传入 `--dpi` 覆盖默认值。
+
 ### Embedding 配置
 
 `llama_index_advanced_rag.py` 会根据 `EMBEDDING_MODEL_NAME` 判断是否启用 OpenAI-compatible embedding。
@@ -136,6 +158,24 @@ test_resource/paddleocr.md
 output/paddleocr_index_new.jsonl
 output/paddleocr_docstore_new.jsonl
 output/paddleocr_sparse.jsonl
+```
+
+如需从 PDF 开始处理并启用 OCR：
+
+```powershell
+uv run python examples\data_ingestion_pipeline.py --input path\to\document.pdf --use-ocr
+```
+
+如需将页图链接写入 Markdown，让现有多模态增强流程处理它们：
+
+```powershell
+uv run python examples\data_ingestion_pipeline.py --input path\to\document.pdf --use-ocr --include-page-images
+```
+
+也可单独执行 OCR，并仅生成 Markdown：
+
+```powershell
+uv run python examples\paddleocr_pdf_ocr.py path\to\document.pdf --output-dir output\ocr
 ```
 
 ### 第二步：运行 LlamaIndex 检索示例
