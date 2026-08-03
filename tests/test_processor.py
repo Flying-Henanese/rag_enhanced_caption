@@ -19,6 +19,35 @@ from rag_enhanced_caption.enhancer.vlm_client import create_default_vlm_client  
 from rag_enhanced_caption.chunker.dispatcher import chunk_markdown  # noqa: E402
 
 
+def test_short_parent_id_injects_parent_context_into_table_prompt() -> None:
+    """A persisted short parent ID should resolve to its complete chunk ID."""
+    captured_prompts: list[str] = []
+
+    async def fake_vlm(user_prompt: str, *args: object) -> str:
+        captured_prompts.append(user_prompt)
+        return '{"summary": "表格摘要", "entities": []}'
+
+    chunks = [
+        {
+            "id": "sample_chunk_5",
+            "content": "这是表格对应的正文上下文。",
+            "metadata": {"element_type": "text", "parent_id": None},
+        },
+        {
+            "id": "sample_chunk_6",
+            "content": "| 名称 | 值 |\n| --- | --- |\n| 测试 | 1 |",
+            "metadata": {"element_type": "Table", "parent_id": "5"},
+        },
+    ]
+
+    processor = MarkdownMultimodalProcessor(vlm_func=fake_vlm, max_concurrency=1)
+    enriched_chunks = asyncio.run(processor.enrich_chunks(chunks))
+
+    assert captured_prompts
+    assert "这是表格对应的正文上下文。" in captured_prompts[0]
+    assert enriched_chunks[1]["text_for_embedding"] == "表格摘要"
+
+
 def test_vlm_table_summarization():
     """
     Test using REAL VLM to generate high-density summaries for tables.

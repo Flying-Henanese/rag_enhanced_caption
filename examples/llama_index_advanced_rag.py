@@ -34,6 +34,7 @@ from rag_enhanced_caption.lexical_search.repository import (
 from rag_enhanced_caption.integrations.llama_index import (
     ShortContextExpandingRetriever,
 )
+from rag_enhanced_caption.chunker.utils.id_utils import resolve_parent_chunk_id
 
 load_dotenv()
 logger.remove()
@@ -162,6 +163,28 @@ def _link_content_nodes_in_order(nodes: List[TextNode]) -> None:
         current.relationships[NodeRelationship.PREVIOUS] = RelatedNodeInfo(
             node_id=previous.node_id
         )
+
+
+def _resolve_parent_node_id(
+    parent_id: str | None,
+    child_chunk_id: str,
+    node_id_map: dict[str, str],
+) -> str | None:
+    """Map a persisted parent reference to its LlamaIndex content node ID.
+
+    Args:
+        parent_id: Short or complete parent chunk ID from the docstore record.
+        child_chunk_id: Complete ID of the child record.
+        node_id_map: Mapping from chunk IDs to their content-node IDs.
+
+    Returns:
+        The mapped LlamaIndex node ID, or ``None`` when the parent is absent or
+        has not been constructed.
+    """
+    resolved_parent_id = resolve_parent_chunk_id(parent_id, child_chunk_id)
+    if resolved_parent_id is None:
+        return None
+    return node_id_map.get(resolved_parent_id)
 
 
 class RerankedRetriever(BaseRetriever):
@@ -298,8 +321,8 @@ def get_advanced_components():
             )
             docstore_nodes[element_node.id_] = element_node
 
-            if parent_id and parent_id in node_id_map:
-                actual_parent_id = node_id_map[parent_id]
+            actual_parent_id = _resolve_parent_node_id(parent_id, chunk_id, node_id_map)
+            if actual_parent_id:
                 element_node.relationships[NodeRelationship.PARENT] = RelatedNodeInfo(
                     node_id=actual_parent_id
                 )

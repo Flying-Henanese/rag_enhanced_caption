@@ -10,6 +10,7 @@ from .json_utils import robust_json_parse
 from .image_utils import create_image_resolver
 from .vlm_client import get_mime_type
 from . import prompts
+from rag_enhanced_caption.chunker.utils.id_utils import resolve_parent_chunk_id
 
 
 class MarkdownMultimodalProcessor:
@@ -39,14 +40,16 @@ class MarkdownMultimodalProcessor:
         if image_resolver is None:
             image_resolver = create_image_resolver(base_dir)
 
-        # 构建 ID 到 Chunk 的映射，方便查找 Parent 上下文。
-        # 注意：parent_id 存的是父文本块在语义块列表中的序号（见 chunker，
-        # parent_id = str(last_text_idx)），它与 chunk["id"]（f"{file_id}_chunk_{idx}"）
-        # 不是同一命名空间。该序号等于每条记录的 metadata["chunk_index"]，
-        # 故这里用 chunk_index 作键，parent_id 才能查得到（原先用 chunk["id"] 永远查不到）。
-        chunk_map = {
-            str(chunk["metadata"].get("chunk_index")): chunk for chunk in chunks
-        }
+        # 同时保留完整 chunk ID 和原始 chunk_index 两种键，以兼容现有短
+        # parent_id 产物及未来直接持久化完整 parent_id 的产物。
+        chunk_map: Dict[str, Dict[str, Any]] = {}
+        for chunk in chunks:
+            chunk_id = str(chunk.get("id") or "").strip()
+            if chunk_id:
+                chunk_map[chunk_id] = chunk
+            chunk_index = chunk["metadata"].get("chunk_index")
+            if chunk_index is not None:
+                chunk_map[str(chunk_index)] = chunk
         tasks = []
 
         for chunk in chunks:
@@ -59,9 +62,16 @@ class MarkdownMultimodalProcessor:
 
             # 获取父节点上下文 (Context)
             parent_context = ""
-            parent_id = chunk["metadata"].get("parent_id")
-            if parent_id and parent_id in chunk_map:
-                parent_context = chunk_map[parent_id]["content"]
+            child_chunk_id = str(chunk.get("id") or "")
+            parent_id = resolve_parent_chunk_id(
+                chunk["metadata"].get("parent_id"), child_chunk_id
+            )
+            raw_parent_id = chunk["metadata"].get("parent_id")
+            parent_chunk = chunk_map.get(parent_id or "") or chunk_map.get(
+                str(raw_parent_id or "")
+            )
+            if parent_chunk:
+                parent_context = parent_chunk["content"]
 
             if (
                 element_type == "Table"

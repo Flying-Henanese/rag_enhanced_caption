@@ -56,6 +56,19 @@ def test_link_content_nodes_in_order_stays_within_section() -> None:
     assert next_section.prev_node is None
 
 
+def test_short_parent_id_maps_to_complete_content_node_id() -> None:
+    node_id_map = {
+        "rag-anything_chunk_5": "rag-anything_chunk_5",
+        "rag-anything_chunk_6": "rag-anything_chunk_6_full",
+    }
+
+    resolved = advanced_rag._resolve_parent_node_id(
+        "5", "rag-anything_chunk_6", node_id_map
+    )
+
+    assert resolved == "rag-anything_chunk_5"
+
+
 def test_context_expansion_pipeline_wraps_reranked_retriever() -> None:
     docstore = SimpleDocumentStore()
     storage_context = StorageContext.from_defaults(docstore=docstore)
