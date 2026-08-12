@@ -6,7 +6,7 @@ import re
 import sys
 import time
 from pathlib import Path
-from typing import Dict, Any, Tuple
+from typing import Any
 
 from dotenv import load_dotenv
 from loguru import logger
@@ -27,8 +27,8 @@ _TEXT_ELEMENT_TYPES = {"text", "", None}
 
 
 def _build_record(
-    chunk: Dict[str, Any], source_file: Path
-) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    chunk: dict[str, Any], source_file: Path
+) -> tuple[dict[str, Any], dict[str, Any]]:
     """将一个已增强的语义块转换为 (index 记录, docstore 记录)。
 
     直接采用 chunker + VLM 增强后写入的 ``text_for_embedding``:
@@ -117,12 +117,16 @@ def _build_record(
     return index_record, docstore_record
 
 
-async def process_document(file_path: Path, output_dir: Path):
-    """
-    Parent-Child 模式文档处理流水线：
+async def process_document(file_path: Path, output_dir: Path) -> None:
+    """运行 Parent-Child 模式文档处理流水线。
+
     1. 语义分块。
     2. VLM 增强描述。
     3. 拆分父子记录，输出 Index 和 DocStore 两层数据。
+
+    Args:
+        file_path: 输入 Markdown 文件路径。
+        output_dir: 输出文件目录。
     """
     start_time = time.time()
 
@@ -189,7 +193,8 @@ async def process_document(file_path: Path, output_dir: Path):
     logger.info(f"Total time: {time.time() - start_time:.2f}s")
 
 
-def main():
+def main() -> None:
+    """解析命令行参数并运行文档处理流水线。"""
     parser = argparse.ArgumentParser(
         description="RAG Enhanced Caption & Chunking CLI",
         formatter_class=argparse.RawDescriptionHelpFormatter,

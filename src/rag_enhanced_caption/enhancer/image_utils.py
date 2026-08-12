@@ -1,21 +1,24 @@
-import urllib.parse
-import base64
 import asyncio
-import httpx
+import base64
+from collections.abc import Awaitable, Callable
 from pathlib import Path
+import urllib.parse
+
+import httpx
 from loguru import logger
 
 
-def create_image_resolver(base_dir: str | Path = "."):
-    """
-    创建一个支持 本地/网络/Base64 的异步图像解析器。
+def create_image_resolver(
+    base_dir: str | Path = ".",
+) -> Callable[[str], Awaitable[bytes | None]]:
+    """创建一个支持本地、网络和 Base64 的异步图像解析器。
 
     Args:
         base_dir: Markdown 文件所在的物理目录。用于拼接相对路径。
                   例如，如果 MD 文件在 /doc/readme.md，这里应传入 "/doc"
 
     Returns:
-        一个接收 image_url 并返回 bytes 的异步回调函数。
+        一个接收 ``image_url`` 并返回图片字节或 ``None`` 的异步回调函数。
     """
     base_path = Path(base_dir).resolve()
 

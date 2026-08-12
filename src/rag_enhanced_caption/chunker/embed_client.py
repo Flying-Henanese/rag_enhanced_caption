@@ -5,24 +5,34 @@ Embedding 客户端工具模块。
 支持通过环境变量灵活配置本地 SentenceTransformer 模型或远程 SiliconFlow/OpenAI 兼容 API。
 """
 
+from collections.abc import Callable
 import os
+from typing import Any
+
 import httpx
-from typing import List, Any, Optional, Callable
-from loguru import logger
 from dotenv import load_dotenv
+from loguru import logger
 
 # 加载环境变量 (确保配置加载的优先级)
 load_dotenv(override=False)
 
 
 def get_remote_embedding_client(
-    api_key: Optional[str] = None,
-    endpoint: Optional[str] = None,
-    model_name: Optional[str] = None,
-) -> Optional[Callable[[List[str]], Any]]:
-    """
-    获取通用的 Embedding API 客户端。
+    api_key: str | None = None,
+    endpoint: str | None = None,
+    model_name: str | None = None,
+) -> Callable[[list[str]], list[list[float]]] | None:
+    """获取通用的 Embedding API 客户端。
+
     支持 OpenAI 兼容协议，适配云端服务 (SiliconFlow/OpenAI) 或本地私有化模型 (vLLM/Ollama)。
+
+    Args:
+        api_key: API 密钥。默认读取 ``EMBEDDING_API_KEY``。
+        endpoint: Embedding 端点。默认读取 ``EMBEDDING_ENDPOINT``。
+        model_name: 模型名称。默认读取 ``EMBEDDING_MODEL_NAME``。
+
+    Returns:
+        同步 Embedding 回调；默认云端服务缺少密钥时返回 ``None``。
     """
     default_endpoint = "https://api.siliconflow.cn/v1/embeddings"
 
@@ -38,7 +48,7 @@ def get_remote_embedding_client(
         )
         return None
 
-    def embed_fn(texts: List[str]) -> List[List[float]]:
+    def embed_fn(texts: list[str]) -> list[list[float]]:
         headers = {"Content-Type": "application/json"}
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
@@ -79,17 +89,19 @@ def get_remote_embedding_client(
 
 
 def get_local_embedding_client(
-    model_id: Optional[str] = None,
-) -> Optional[Callable[[List[str]], Any]]:
-    """
-    获取本地模型驱动的 Embedding 客户端。
+    model_id: str | None = None,
+) -> Callable[[list[str]], Any] | None:
+    """获取本地模型驱动的 Embedding 客户端。
 
     采用延迟加载 `sentence-transformers` 策略，避免在未安装该库的环境下报错。
     通过下载并加载模型到本地执行推理，适合对数据隐私要求高、或不希望依赖外部网络的场景。
 
-    返回:
-        一个接收 List[str] 并返回向量的函数。
-        如果无法加载包或模型，返回 None。
+    Args:
+        model_id: 本地模型标识。默认读取 ``LOCAL_EMBEDDING_MODEL``。
+
+    Returns:
+        接收 ``list[str]`` 并返回向量的函数；无法加载包或模型时返回
+        ``None``。
     """
     model_id = model_id or os.getenv("LOCAL_EMBEDDING_MODEL", "BAAI/bge-small-zh-v1.5")
 
@@ -99,7 +111,7 @@ def get_local_embedding_client(
         logger.info(f"正在加载本地 Embedding 模型: {model_id}")
         model = SentenceTransformer(model_id)
 
-        def embed_fn(texts: List[str]) -> Any:
+        def embed_fn(texts: list[str]) -> Any:
             # 使用本地模型进行编码
             return model.encode(texts)
 
@@ -112,13 +124,15 @@ def get_local_embedding_client(
         return None
 
 
-def get_default_embedding_client():
-    """
-    获取默认的 Embedding 客户端策略。
+def get_default_embedding_client() -> Callable[[list[str]], list[list[float]]] | None:
+    """获取默认的 Embedding 客户端策略。
 
     逻辑：
     优先尝试从环境变量配置加载远程 API（成本低、无需下载重型模型）。
     如果用户没有配置远程 API KEY，则返回 None。此时调用者 (parsers)
     可根据业务逻辑决定是否降级或跳过语义切分过程。
+
+    Returns:
+        远程 Embedding 回调；无法初始化时返回 ``None``。
     """
     return get_remote_embedding_client()

@@ -11,10 +11,11 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from loguru import logger
 from markdown_it import MarkdownIt
+from markdown_it.token import Token
 from mdit_py_plugins.dollarmath import dollarmath_plugin
 
-import logging
 from ..nlp import count_tokens
 from ..embed_client import get_default_embedding_client
 from ..schema import SemanticChunk
@@ -25,8 +26,6 @@ from ..utils.md_parser_utils import (
     split_long_text_hierarchically,
 )
 from ..utils.table_utils import html_table_to_key_value
-
-logger = logging.getLogger(__name__)
 
 _CONTROL_SPECIAL_ELEMENTS = {
     "none",
@@ -67,7 +66,7 @@ def _flush_content(
     embed_fn: Any,
     special_element: str | None = None,
     allow_split: bool = False,
-    state: dict | None = None,
+    state: dict[str, int] | None = None,
 ) -> None:
     """
     将当前累积的文本内容“冲刷”并封装为一个或多个 SemanticChunk 放入结果列表。
@@ -171,8 +170,15 @@ def _flush_content(
 
 
 def _handle_image_caption(
-    tokens, i, result, current_content, title_stack, max_length, embed_fn, state
-):
+    tokens: list[Token],
+    i: int,
+    result: list[SemanticChunk],
+    current_content: list[str],
+    title_stack: list[str],
+    max_length: int,
+    embed_fn: Any,
+    state: dict[str, int],
+) -> tuple[bool, int]:
     token = tokens[i]
     if token.type != "paragraph_open":
         return False, i
@@ -292,8 +298,8 @@ def chunk_markdown(
     md = MarkdownIt("commonmark").enable("table")
     md.use(dollarmath_plugin, allow_space=True, allow_digits=True)
 
-    tokens: list = md.parse(markdown_content)
-    original_lines: list = markdown_content.split("\n")
+    tokens: list[Token] = md.parse(markdown_content)
+    original_lines: list[str] = markdown_content.split("\n")
 
     result: list[SemanticChunk] = []
     current_content: list[str] = []

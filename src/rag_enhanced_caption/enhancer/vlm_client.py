@@ -1,13 +1,24 @@
+from collections.abc import Awaitable, Callable
 import os
+from typing import Any
+
 import httpx
-from typing import Optional
 from loguru import logger
 
 
+VlmCall = Callable[[str, str, str | None, bytes | None], Awaitable[str]]
+
+
 def get_mime_type(image_bytes: bytes) -> str:
-    """
-    根据图片的 Magic Numbers (文件头魔数) 动态判断 MIME Type。
+    """根据图片的 Magic Numbers 动态判断 MIME 类型。
+
     支持常见的 JPEG, PNG, GIF, WEBP。如果无法识别，默认回退到 image/jpeg。
+
+    Args:
+        image_bytes: 图片的原始字节。
+
+    Returns:
+        检测出的 MIME 类型。
     """
     if image_bytes.startswith(b"\xff\xd8\xff"):
         return "image/jpeg"
@@ -29,22 +40,41 @@ def get_mime_type(image_bytes: bytes) -> str:
 async def default_vlm_call(
     user_prompt: str,
     system_prompt: str,
-    image_base64: Optional[str] = None,
-    image_bytes: Optional[bytes] = None,
-    api_key: Optional[str] = None,
-    endpoint: Optional[str] = None,
-    model_name: Optional[str] = None,
+    image_base64: str | None = None,
+    image_bytes: bytes | None = None,
+    api_key: str | None = None,
+    endpoint: str | None = None,
+    model_name: str | None = None,
     temperature: float = 0.2,
     timeout: float = 60.0,
 ) -> str:
-    """
-    A default, highly-versatile VLM caller that assumes an OpenAI-compatible HTTP endpoint.
+    """Call an OpenAI-compatible VLM endpoint.
+
     This works out-of-the-box with services like vLLM, SiliconFlow, Together AI, OpenAI, etc.
 
     If parameters are not provided, it attempts to load them from environment variables:
     - VLM_API_KEY
     - VLM_ENDPOINT (default: "http://127.0.0.1:8000/v1/chat/completions")
     - VLM_MODEL_NAME (default: "default-model")
+
+    Args:
+        user_prompt: User message sent to the model.
+        system_prompt: System instruction sent to the model.
+        image_base64: Optional Base64-encoded image payload.
+        image_bytes: Optional raw image bytes used for MIME detection.
+        api_key: API key. Defaults to ``VLM_API_KEY``.
+        endpoint: Chat-completions endpoint. Defaults to ``VLM_ENDPOINT``.
+        model_name: Model identifier. Defaults to ``VLM_MODEL_NAME``.
+        temperature: Sampling temperature.
+        timeout: Request timeout in seconds.
+
+    Returns:
+        Text content from the first response choice.
+
+    Raises:
+        httpx.HTTPStatusError: If the endpoint returns a non-success status.
+        httpx.HTTPError: If the request fails.
+        KeyError: If the response does not contain the expected choice payload.
     """
 
     api_key = api_key or os.getenv("VLM_API_KEY", "")
@@ -101,17 +131,23 @@ async def default_vlm_call(
         raise
 
 
-def create_default_vlm_client(**kwargs):
-    """
-    Factory function to create a VLM caller with pre-configured settings.
+def create_default_vlm_client(**kwargs: Any) -> VlmCall:
+    """Create a VLM caller with preconfigured settings.
+
     Useful for passing into MarkdownMultimodalProcessor.
+
+    Args:
+        **kwargs: Keyword arguments forwarded to ``default_vlm_call``.
+
+    Returns:
+        An asynchronous VLM callback with the processor-compatible signature.
     """
 
     async def configured_vlm_call(
         user_prompt: str,
         system_prompt: str,
-        image_base64: Optional[str] = None,
-        image_bytes: Optional[bytes] = None,
+        image_base64: str | None = None,
+        image_bytes: bytes | None = None,
     ) -> str:
         return await default_vlm_call(
             user_prompt, system_prompt, image_base64, image_bytes, **kwargs

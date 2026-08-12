@@ -1,48 +1,63 @@
-import base64
 import asyncio
-from typing import Dict, Any, Optional, Callable, Awaitable, List
+import base64
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from loguru import logger
 import re
+from typing import Any
+
+from loguru import logger
 
 # 内部引用
 from .json_utils import robust_json_parse
 from .image_utils import create_image_resolver
-from .vlm_client import get_mime_type
+from .vlm_client import VlmCall, get_mime_type
 from . import prompts
 from rag_enhanced_caption.chunker.utils.id_utils import resolve_parent_chunk_id
 
 
 class MarkdownMultimodalProcessor:
-    """
-    Markdown 多模态处理器 (Multi-Vector 架构版)
+    """Markdown 多模态处理器（Multi-Vector 架构版）。
+
     负责对已被底层语义解析器分离出的 Table, Image 等独立 Chunk 进行批量 VLM 分析，
     并将生成的纯净自然语言摘要注入到 Chunk 的 text_for_embedding 字段中。
+
+    Args:
+        vlm_func: 异步 VLM 调用函数。
+        max_concurrency: VLM 请求的最大并发数。
     """
 
     def __init__(
         self,
-        vlm_func: Callable[[str, str, Optional[str]], Awaitable[str]],
+        vlm_func: VlmCall,
         max_concurrency: int = 5,
-    ):
+    ) -> None:
         self.vlm_func = vlm_func
         self.semaphore = asyncio.Semaphore(max_concurrency)
 
     async def enrich_chunks(
         self,
-        chunks: List[Dict[str, Any]],
-        image_resolver: Optional[Callable[[str], Awaitable[Optional[bytes]]]] = None,
+        chunks: list[dict[str, Any]],
+        image_resolver: Callable[[str], Awaitable[bytes | None]] | None = None,
         base_dir: str | Path = ".",
-    ) -> List[Dict[str, Any]]:
-        """
-        批量增强语义块。仅对 element_type 为 Table 或 Image 的子节点执行 VLM 分析。
+    ) -> list[dict[str, Any]]:
+        """批量增强语义块。
+
+        仅对 ``element_type`` 为 Table 或 Image 的子节点执行 VLM 分析。
+
+        Args:
+            chunks: 待增强的语义块。
+            image_resolver: 异步图像解析函数。默认根据 ``base_dir`` 创建。
+            base_dir: Markdown 文件所在目录，用于解析相对图片路径。
+
+        Returns:
+            原列表中已写入 ``text_for_embedding`` 的语义块。
         """
         if image_resolver is None:
             image_resolver = create_image_resolver(base_dir)
 
         # 同时保留完整 chunk ID 和原始 chunk_index 两种键，以兼容现有短
         # parent_id 产物及未来直接持久化完整 parent_id 的产物。
-        chunk_map: Dict[str, Dict[str, Any]] = {}
+        chunk_map: dict[str, dict[str, Any]] = {}
         for chunk in chunks:
             chunk_id = str(chunk.get("id") or "").strip()
             if chunk_id:
@@ -50,7 +65,7 @@ class MarkdownMultimodalProcessor:
             chunk_index = chunk["metadata"].get("chunk_index")
             if chunk_index is not None:
                 chunk_map[str(chunk_index)] = chunk
-        tasks = []
+        tasks: list[Awaitable[None]] = []
 
         for chunk in chunks:
             element_type = chunk["metadata"].get("element_type", "text")
@@ -96,8 +111,8 @@ class MarkdownMultimodalProcessor:
         return chunks
 
     async def _analyze_element(
-        self, user_prompt: str, system_prompt: str, image_bytes: Optional[bytes] = None
-    ) -> Dict[str, Any]:
+        self, user_prompt: str, system_prompt: str, image_bytes: bytes | None = None
+    ) -> dict[str, Any]:
         """统一的 VLM 分析与解析逻辑（受信号量控制并发）"""
         image_base64 = (
             base64.b64encode(image_bytes).decode("utf-8") if image_bytes else None
@@ -119,7 +134,10 @@ class MarkdownMultimodalProcessor:
             return {"success": False, "error": str(e), "summary": "", "entities": []}
 
     async def _process_image_chunk(
-        self, chunk: Dict[str, Any], context: str, image_resolver: Callable
+        self,
+        chunk: dict[str, Any],
+        context: str,
+        image_resolver: Callable[[str], Awaitable[bytes | None]],
     ) -> None:
         """处理独立图像 Chunk"""
         # 从内容中提取 URL (例如 ![alt](url))
@@ -174,7 +192,7 @@ class MarkdownMultimodalProcessor:
         else:
             chunk["text_for_embedding"] = f"Image content: {image_url}"
 
-    async def _process_table_chunk(self, chunk: Dict[str, Any], context: str) -> None:
+    async def _process_table_chunk(self, chunk: dict[str, Any], context: str) -> None:
         """处理独立表格 Chunk"""
         table_markdown = chunk["content"]
 

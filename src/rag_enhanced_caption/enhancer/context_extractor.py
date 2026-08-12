@@ -1,24 +1,26 @@
 from loguru import logger
-from typing import List, Optional
 
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
 
 
 class MarkdownContextExtractor:
-    """
-    基于 markdown-it-py 的语境提取器。
+    """基于 markdown-it-py 的语境提取器。
+
     从 Markdown Token 流中手术刀式地提取多模态元素（图片/表格）的语境。
+
+    Args:
+        max_chars: 返回语境的目标最大字符数。
     """
 
-    def __init__(self, max_chars: int = 200):
+    def __init__(self, max_chars: int = 200) -> None:
         self.md = MarkdownIt("commonmark").enable("table")
         self.max_chars = max_chars
 
     def extract_context(
         self,
         md_content: str,
-        target_image_url: Optional[str] = None,
+        target_image_url: str | None = None,
         target_idx: int = -1,
     ) -> str:
         """
@@ -43,7 +45,7 @@ class MarkdownContextExtractor:
 
         return self._get_surgical_context(tokens, target_idx)
 
-    def _find_image_token_index(self, tokens: List[Token], url: str) -> int:
+    def _find_image_token_index(self, tokens: list[Token], url: str) -> int:
         """在 Token 流中寻找包含目标图片 URL 的 Token 索引"""
         for i, token in enumerate(tokens):
             # markdown-it 的图片通常在 inline token 的 children 中
@@ -56,7 +58,7 @@ class MarkdownContextExtractor:
                 return i
         return -1
 
-    def _get_surgical_context(self, tokens: List[Token], target_idx: int) -> str:
+    def _get_surgical_context(self, tokens: list[Token], target_idx: int) -> str:
         """
         核心算法：手术刀式提取 (升级版)。
         1. 双向回溯/探测关联标题，支持 | 分隔的路径。

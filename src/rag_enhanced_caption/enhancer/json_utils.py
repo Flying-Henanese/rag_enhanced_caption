@@ -1,10 +1,19 @@
 import json
 import re
+from typing import Any
+
 from loguru import logger
 
 
-def try_parse_json(json_str: str) -> dict:
-    """尝试解析 JSON 字符串，失败返回 None"""
+def try_parse_json(json_str: str) -> dict[str, Any] | None:
+    """尝试解析 JSON 字符串。
+
+    Args:
+        json_str: 待解析的 JSON 字符串。
+
+    Returns:
+        解析后的字典；输入为空或解析失败时返回 ``None``。
+    """
     if not json_str or not json_str.strip():
         return None
     try:
@@ -14,7 +23,14 @@ def try_parse_json(json_str: str) -> dict:
 
 
 def basic_json_cleanup(json_str: str) -> str:
-    """基础清理：处理常见的不规范 JSON 格式"""
+    """处理常见的不规范 JSON 格式。
+
+    Args:
+        json_str: 待清理的 JSON 字符串。
+
+    Returns:
+        修正智能引号和尾随逗号后的字符串。
+    """
     json_str = json_str.strip()
     # 修复中文引号或智能引号
     json_str = json_str.replace("“", '"').replace("”", '"')
@@ -25,11 +41,18 @@ def basic_json_cleanup(json_str: str) -> str:
 
 
 def progressive_quote_fix(json_str: str) -> str:
-    """进阶清理：处理转义字符和引号问题"""
+    """处理 JSON 字符串中的转义字符和引号问题。
+
+    Args:
+        json_str: 待修复的 JSON 字符串。
+
+    Returns:
+        修正转义字符后的字符串。
+    """
     # 仅转义引号前未转义的反斜杠
     json_str = re.sub(r'(?<!\\)\\(?=")', r"\\\\", json_str)
 
-    def fix_string_content(match):
+    def fix_string_content(match: re.Match[str]) -> str:
         content = match.group(1)
         # 修复字符串值中未转义的反斜杠 (例如 \alpha -> \\alpha)
         content = re.sub(r"\\(?=[a-zA-Z])", r"\\\\", content)
@@ -39,8 +62,15 @@ def progressive_quote_fix(json_str: str) -> str:
     return json_str
 
 
-def extract_all_json_candidates(response: str) -> list:
-    """从模型长文本回复中提取所有可能的 JSON 候选字符串"""
+def extract_all_json_candidates(response: str) -> list[str]:
+    """从模型长文本回复中提取所有可能的 JSON 候选字符串。
+
+    Args:
+        response: 模型返回的原始文本。
+
+    Returns:
+        按提取策略收集的 JSON 候选字符串。
+    """
     candidates = []
 
     # 预处理：移除推理模型（如 DeepSeek-R1, Qwen-math）产生的思考过程标签
@@ -81,8 +111,15 @@ def extract_all_json_candidates(response: str) -> list:
     return candidates
 
 
-def extract_fields_with_regex(response: str) -> dict:
-    """终极兜底：当 JSON 完全损坏时，用正则强行提取关键字段"""
+def extract_fields_with_regex(response: str) -> dict[str, Any]:
+    """在 JSON 完全损坏时用正则提取关键字段。
+
+    Args:
+        response: 模型返回的原始文本。
+
+    Returns:
+        包含描述和实体信息的兜底结果。
+    """
     logger.warning("JSON 解析完全失败，正在使用正则表达式回退提取字段")
 
     # 预处理：移除推理模型产生的思考过程标签，防止正则提取到思考内容
@@ -126,10 +163,14 @@ def extract_fields_with_regex(response: str) -> dict:
     }
 
 
-def robust_json_parse(response: str) -> dict:
-    """
-    对外暴露的主函数：高度鲁棒的 JSON 解析器
-    能处理包含 Markdown、思考标签、轻微语法错误的 LLM JSON 输出
+def robust_json_parse(response: str) -> dict[str, Any]:
+    """解析可能包含 Markdown 或轻微语法错误的模型 JSON 输出。
+
+    Args:
+        response: 模型返回的原始文本。
+
+    Returns:
+        解析后的 JSON 字典，或正则提取得到的兜底字段。
     """
     candidates = extract_all_json_candidates(response)
 

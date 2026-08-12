@@ -1,7 +1,8 @@
 import re
+from typing import Any
+
 from bs4 import BeautifulSoup, Comment
 from loguru import logger
-from typing import List, Dict, Any
 
 
 def clean_html_for_llm(html_content: str) -> str:
@@ -133,9 +134,8 @@ def clean_markdown_styles(md_content: str) -> str:
     return clean_html_for_llm(md_content)
 
 
-def compress_and_relink_chunks(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """
-    清理无意义的空块，并安全地重塑断开的 parent_id 关联。
+def compress_and_relink_chunks(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """清理无意义的空块，并安全地重塑断开的 parent_id 关联。
 
     工作流：
     1. 对每个 chunk 进行脱水清洗。
@@ -143,6 +143,12 @@ def compress_and_relink_chunks(chunks: List[Dict[str, Any]]) -> List[Dict[str, A
     3. 识别纯图片块，纠正其 element_type。
     4. 为每个废弃块寻找它最近的有效祖先节点（跳跃继承）。
     5. 重建列表，移除废弃块，并更新幸存块的 parent_id。
+
+    Args:
+        chunks: 待清洗和重建父子关联的语义块。
+
+    Returns:
+        清洗完成且父子关联已修复的语义块。
     """
 
     # 阶段 1 & 2: 清洗并识别待删除块
@@ -194,7 +200,7 @@ def compress_and_relink_chunks(chunks: List[Dict[str, Any]]) -> List[Dict[str, A
     logger.info(f"Filtering out {len(to_delete_ids)} empty chunks after cleaning.")
 
     # 辅助函数：根据 parent_id 字符串 (e.g. "5") 解析出完整的真实 ID (e.g. "file_chunk_5")
-    def _resolve_full_id(base_file_id: str, raw_parent_id: str) -> str:
+    def _resolve_full_id(base_file_id: str, raw_parent_id: str | None) -> str | None:
         if not raw_parent_id:
             return None
         # 如果已经是完整 ID 就直接返回
