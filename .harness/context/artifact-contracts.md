@@ -29,7 +29,9 @@ output/
 +-- <name>_docstore.jsonl
 ```
 
-- `<name>_enhanced.md`: Markdown preview with multimodal analysis injected.
+- `<name>_enhanced.md`: chunk-by-chunk Markdown preview separated by horizontal
+  rules. VLM summaries remain in `text_for_embedding` and are not injected into
+  this preview.
 - `<name>_index.jsonl`: compact records intended for embedding and vector
   indexing.
 - `<name>_docstore.jsonl`: full parent-child records intended for retrieval-time
@@ -64,10 +66,19 @@ Writers and readers:
 - Covered by `tests/test_example_lexical_pipeline.py`,
   `tests/test_lexical_search.py`, and `tests/test_retrieval_components.py`.
 
-## Index JSONL
+## Base CLI Index JSONL
 
-`*_index.jsonl` and `*_index_new.jsonl` contain compact embedding-facing
-records:
+`*_index.jsonl` contains compact embedding-facing records. Text records use a
+`p_` ID prefix and multimodal records use a `c_` prefix:
+
+```json
+{"id": "p_chunk_id", "parent_id": null, "text_for_embedding": "embedding text", "metadata": {"type": "parent", "source": "document.md", "element_type": "text"}}
+```
+
+## Advanced Example Index JSONL
+
+`*_index_new.jsonl` uses the semantic chunk IDs directly and has a smaller
+metadata shape:
 
 ```json
 {"id": "chunk_id", "text_for_embedding": "embedding text", "metadata": {"element_type": "text"}}
@@ -84,17 +95,34 @@ Index invariants:
 - Metadata should contain enough type information for downstream conversion,
   but full content belongs in docstore artifacts.
 
-## Docstore JSONL
+## Base CLI Docstore JSONL
 
-`*_docstore.jsonl` and `*_docstore_new.jsonl` preserve complete content and
-structure:
+`*_docstore.jsonl` preserves full content, embedding text, and structure:
+
+```json
+{
+  "id": "p_chunk_id",
+  "type": "parent",
+  "parent_id": null,
+  "text_for_embedding": "semantic summary",
+  "full_content": "complete Markdown content",
+  "header_path": ["Heading", "Subheading"],
+  "element_type": "text",
+  "entities": []
+}
+```
+
+## Advanced Example Docstore JSONL
+
+`*_docstore_new.jsonl` keeps embedding text exclusively in the matching
+`*_index_new.jsonl` record. Its docstore row contains the cleaned content and
+structure used by the example retrieval pipeline:
 
 ```json
 {
   "id": "chunk_id",
+  "full_content": "cleaned Markdown content",
   "parent_id": null,
-  "text_for_embedding": "semantic summary",
-  "full_content": "complete Markdown content",
   "header_path": ["Heading", "Subheading"],
   "element_type": "text",
   "entities": []
@@ -114,7 +142,9 @@ Docstore invariants:
   retrievers and AutoMerge-style aggregation.
 - If a chunk is enriched by a VLM, the embedding-facing summary and full content
   must not be confused: `text_for_embedding` is for recall, `full_content` is
-  for answer context and inspection.
+  for answer context and inspection. In the advanced example these fields live
+  in separate index and docstore rows; the base CLI also repeats
+  `text_for_embedding` in its docstore row.
 
 ## Sparse JSONL
 

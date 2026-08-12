@@ -17,11 +17,12 @@
 ## 输出结果
 
 CLI 处理一份 Markdown 后，会产出三类文件：
-- `<name>_enhanced.md`：注入多模态分析结果后的 Markdown 预览稿
+- `<name>_enhanced.md`：以分隔线连接各语义块的 Markdown 预览稿
 - `<name>_index.jsonl`：面向向量库 / Embedding 的轻量记录
 - `<name>_docstore.jsonl`：面向文档库的完整父子记录
 
 这种拆分方式的目标是：让向量检索只看干净的语义文本，同时保留完整 Markdown、表格、图片引用供召回后展开。
+VLM 摘要保存在 `text_for_embedding` 中，不会注入 `_enhanced.md` 预览稿。
 
 ## 核心能力
 
@@ -140,9 +141,13 @@ output/
   "full_content": "![image](path)\n\n...analysis...",
   "metadata": {
     "chunk_type": "multimodal",
+    "element_type": "Image",
     "image_url": "path",
-    "entities": ["entity_a", "entity_b"]
-  }
+    "chunk_index": 3
+  },
+  "header_path": ["章节"],
+  "element_type": "Image",
+  "entities": ["entity_a", "entity_b"]
 }
 ```
 

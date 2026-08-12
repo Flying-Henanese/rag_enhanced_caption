@@ -36,8 +36,8 @@ This document provides foundational guidance and architectural mandates for the 
   - After changing source docs such as `README.md`, `README_zh.md`, `examples/README_zh.md`, or this file, update the matching harness context file if the project facts changed.
 - **Testing**:
   - Always run Python commands through `uv run` (for example, `uv run python ...`) to ensure the correct project environment is used.
-  - Run the functional test script: `uv run python tests/test_processor.py`.
-  - Ensure a `.env` file exists in the root or `src` directory for VLM configuration.
+  - Run the focused processor tests: `uv run pytest tests/test_processor.py`.
+  - Ensure a `.env` file exists in the project root or current working directory for VLM configuration.
 - **Dependency Management**:
   - Use `uv add <package>` to add production core dependencies to `pyproject.toml`.
   - Use `uv add --dev <package>` for development and test dependencies (e.g., linters, testing frameworks).

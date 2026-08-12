@@ -17,11 +17,13 @@ The project assumes your upstream pipeline has already converted source document
 ## What It Produces
 
 Given one Markdown file, the CLI generates three artifacts:
-- `<name>_enhanced.md`: Markdown preview with multimodal analysis injected
+- `<name>_enhanced.md`: chunk-by-chunk Markdown preview separated by horizontal rules
 - `<name>_index.jsonl`: lightweight records intended for embedding / vector indexing
 - `<name>_docstore.jsonl`: full parent-child records intended for a docstore
 
 This split helps keep noisy raw Markdown, large tables, and image references out of the embedding text while preserving full content for downstream retrieval.
+VLM summaries are stored in `text_for_embedding`; they are not injected into
+the `_enhanced.md` preview.
 
 ## Core Capabilities
 
@@ -142,9 +144,13 @@ output/
   "full_content": "![image](path)\n\n...analysis...",
   "metadata": {
     "chunk_type": "multimodal",
+    "element_type": "Image",
     "image_url": "path",
-    "entities": ["entity_a", "entity_b"]
-  }
+    "chunk_index": 3
+  },
+  "header_path": ["Section"],
+  "element_type": "Image",
+  "entities": ["entity_a", "entity_b"]
 }
 ```
 

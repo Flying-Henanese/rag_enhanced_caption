@@ -10,7 +10,7 @@ documentation, and `.harness/` agree with the current repository behavior.
 - `README.md`
 - `README_zh.md`
 - `examples/README_zh.md`
-- `AGENT.md`
+- `AGENTS.md`
 - `.harness/`
 - `examples/data_ingestion_pipeline.py`
 - `examples/llama_index_advanced_rag.py`
