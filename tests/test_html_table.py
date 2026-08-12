@@ -18,8 +18,8 @@ from rag_enhanced_caption.chunker.dispatcher import chunk_markdown
 load_dotenv()
 
 
-def test_html_table_parsing_and_enrichment():
-    async def run_test():
+def test_html_table_parsing_and_enrichment() -> None:
+    async def run_test() -> None:
         if not os.getenv("VLM_API_KEY"):
             pytest.skip("No VLM_API_KEY configured.")
 
@@ -87,7 +87,7 @@ End of document.
     asyncio.run(run_test())
 
 
-def test_html_table_regex_logic():
+def test_html_table_regex_logic() -> None:
     html_content = '<div align="center">\n    <table border="1">\n        <tr>\n            <th>Feature</th>\n        </tr>\n    </table>\n</div>'.lower()
     assert "<table" in html_content
 

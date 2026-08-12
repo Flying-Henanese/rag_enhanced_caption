@@ -44,11 +44,16 @@ def infer_heading_level(title: str) -> int:
 
 
 def get_title_path(stack: list[str]) -> str:
-    """
-    根据标题栈生成标题路径，用"|"分隔。
+    """根据标题栈生成标题路径，用"|"分隔。
 
     例如: stack 为 ["一级标题", "二级标题", "", "", "", ""]
     返回: "一级标题|二级标题"
+
+    Args:
+        stack: 按层级排列的标题栈，空字符串表示缺失层级。
+
+    Returns:
+        过滤空层级后用 ``|`` 拼接的标题路径。
     """
     return "|".join([t for t in stack if t])
 

@@ -1,5 +1,6 @@
 import importlib.util
 from pathlib import Path
+from types import ModuleType
 
 from llama_index.core.retrievers import BaseRetriever
 from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
@@ -16,7 +17,7 @@ from rag_enhanced_caption.lexical_search.repository import (
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def _load_example(name: str, filename: str):
+def _load_example(name: str, filename: str) -> ModuleType:
     path = ROOT / "examples" / filename
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)

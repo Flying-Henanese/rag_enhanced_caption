@@ -2,19 +2,22 @@
 测试模块：验证核心的 Markdown 语义化分块功能
 """
 
-import pytest
-from rag_enhanced_caption.chunker.parsers import semantic
-from rag_enhanced_caption.chunker.embed_client import (
-    get_remote_embedding_client,
-    get_local_embedding_client,
-)
+from collections.abc import Callable
+from typing import Any
+
 import dotenv
+import pytest
+from rag_enhanced_caption.chunker.embed_client import (
+    get_local_embedding_client,
+    get_remote_embedding_client,
+)
+from rag_enhanced_caption.chunker.parsers import semantic
 
 dotenv.load_dotenv()
 
 
 @pytest.fixture
-def remote_embed_fn():
+def remote_embed_fn() -> Callable[[list[str]], list[list[float]]]:
     """
     Fixture: 初始化远程 Embedding 客户端 (如 SiliconFlow API)。
     如果在 CI 环境或本地未配置相关密钥，自动跳过依赖该 fixture 的测试。
@@ -26,7 +29,7 @@ def remote_embed_fn():
 
 
 @pytest.fixture
-def local_embed_fn():
+def local_embed_fn() -> Callable[[list[str]], Any]:
     """
     Fixture: 初始化本地模型 Embedding 客户端。
     如果在未安装 sentence-transformers 的环境中运行，则自动跳过。
@@ -38,7 +41,7 @@ def local_embed_fn():
 
 
 @pytest.fixture
-def sample_markdown():
+def sample_markdown() -> str:
     """完全恢复的最原始长文档测试样本，包含标题级联、图片题注、JSON 块、表格等复杂元素。"""
     return """
 ## 痛点与挑战
@@ -208,8 +211,8 @@ key-value格式表格
 
 
 def test_semantic_chunking_with_full_sample_assertions(
-    remote_embed_fn, sample_markdown
-):
+    remote_embed_fn: Callable[[list[str]], list[list[float]]], sample_markdown: str
+) -> None:
     """
     针对完整原始长文档的深度逻辑断言。
 
@@ -285,7 +288,9 @@ def test_semantic_chunking_with_full_sample_assertions(
     )
 
 
-def test_remote_api_smoke_with_full_sample(remote_embed_fn, sample_markdown):
+def test_remote_api_smoke_with_full_sample(
+    remote_embed_fn: Callable[[list[str]], list[list[float]]], sample_markdown: str
+) -> None:
     """
     冒烟测试：验证远程 API 对全量长样本的处理能力。
     简单确认是否能无错跑通且输出包含关键内容。
@@ -296,7 +301,9 @@ def test_remote_api_smoke_with_full_sample(remote_embed_fn, sample_markdown):
     print("\n[远程 API 验证成功] 成功处理了全量长样本。")
 
 
-def test_demonstrate_semantic_chunking(remote_embed_fn, sample_markdown):
+def test_demonstrate_semantic_chunking(
+    remote_embed_fn: Callable[[list[str]], list[list[float]]], sample_markdown: str
+) -> None:
     """
     演示语义分块功能的执行结果并打印在标准输出中。
     """

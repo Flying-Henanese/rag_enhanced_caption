@@ -19,7 +19,13 @@ _TABLE_TYPES = {"Table", "Table KV", "html_block"}
 
 @dataclass(frozen=True)
 class ExtractedSearchField:
-    """A lexical field extracted before it receives a stable ID."""
+    """A lexical field extracted before it receives a stable ID.
+
+    Args:
+        field_type: Kind of extracted field, such as ``table_row``.
+        text: Canonical field text used for lexical search.
+        metadata: Source details retained for persistence or debugging.
+    """
 
     field_type: str
     text: str
@@ -30,7 +36,14 @@ class SearchFieldExtractor(Protocol):
     """Interface for pluggable deterministic search-field extraction."""
 
     def extract(self, chunk: dict[str, Any]) -> list[ExtractedSearchField]:
-        """Extract high-value lexical fields from a chunk."""
+        """Extract high-value lexical fields from a chunk.
+
+        Args:
+            chunk: Enriched chunk containing content and metadata.
+
+        Returns:
+            Deterministically extracted lexical fields.
+        """
 
 
 def _split_markdown_row(line: str) -> list[str]:
@@ -94,7 +107,14 @@ class DeterministicSearchFieldExtractor:
     """Extract tables and fixed-format values without an LLM."""
 
     def extract(self, chunk: dict[str, Any]) -> list[ExtractedSearchField]:
-        """Extract high-value fields from one enriched chunk."""
+        """Extract high-value fields from one enriched chunk.
+
+        Args:
+            chunk: Enriched chunk containing content and metadata.
+
+        Returns:
+            Table, date, and email fields found in the chunk.
+        """
         content = str(chunk.get("content") or chunk.get("full_content") or "")
         metadata = chunk.get("metadata") or {}
         element_type = str(

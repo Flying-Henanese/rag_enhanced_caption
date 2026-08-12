@@ -5,7 +5,7 @@
 from rag_enhanced_caption.chunker.parsers import semantic
 
 
-def test_nested_list_duplication_fix():
+def test_nested_list_duplication_fix() -> None:
     """
     测试点：嵌套列表在解析时不再发生内容翻倍、解析错位或生成多余重复块的问题。
     原先暴力的 while 循环会导致 "发布PaddleOCR-VL" 这样的内容被多次 append 到同一个 Chunk，
@@ -49,7 +49,7 @@ def test_nested_list_duplication_fix():
     )
 
 
-def test_html_block_summary_context_fix():
+def test_html_block_summary_context_fix() -> None:
     """
     测试点：html_block 中的 <summary> 能够被正确提取为虚拟标题，
     从而保障 details 标签内部包裹的 Markdown 元素不会丢失上下文 (parent_id/header_path)。
@@ -92,7 +92,7 @@ def test_html_block_summary_context_fix():
     assert has_normal_heading, "原有的外层标题上下文 (版本记录) 丢失了。"
 
 
-def test_math_block_and_inline_math_roundtrip():
+def test_math_block_and_inline_math_roundtrip() -> None:
     """
     测试点：
     1. 独立公式（块级公式）应保持为 $$...$$ 形式，不应被降级为 $...$。

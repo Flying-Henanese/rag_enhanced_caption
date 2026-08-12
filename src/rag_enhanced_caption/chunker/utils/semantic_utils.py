@@ -43,9 +43,15 @@ def _ensure_punkt_tab() -> None:
 
 
 def split_sentences_chinese(text: str) -> list[str]:
-    """
-    使用正则表达式将中文文本分割成句子。
+    """使用正则表达式将中文文本分割成句子。
+
     匹配常见的中文断句标点，并考虑右引号/单引号等闭合情况，避免把引号内的完整句子错误拆断。
+
+    Args:
+        text: 待分句的中文文本。
+
+    Returns:
+        去除空白后的中文句子列表。
     """
     # 匹配规则：匹配。！？且后面跟着右引号的情况，或者匹配。！？且后面不跟着右引号的情况
     pattern = r'(?<=[。！？][”’"])|(?<=[。！？])(?![”’"])'
@@ -54,9 +60,18 @@ def split_sentences_chinese(text: str) -> list[str]:
 
 
 def split_mixed_sentences(text: str) -> list[str]:
-    """
-    处理中英文混合文本的分句逻辑。
+    """处理中英文混合文本的分句逻辑。
+
     优先用段落换行粗切，再判断段内字符特征分别走 NLTK (英文) 或正则 (中文) 的分句处理。
+
+    Args:
+        text: 待分句的中英文混合文本。
+
+    Returns:
+        按原始顺序排列且去除空白的句子列表。
+
+    Raises:
+        RuntimeError: 如果必需的 NLTK ``punkt_tab`` 资源不可用。
     """
     _ensure_punkt_tab()
 
@@ -85,11 +100,18 @@ def split_mixed_sentences(text: str) -> list[str]:
 def find_best_num_clusters(
     embeddings: Any, min_clusters: int = 2, max_clusters: int = 10
 ) -> int:
-    """
-    (废弃 / 实验性策略) 使用轮廓系数 (Silhouette Score) 选择最佳聚类数量。
+    """使用轮廓系数选择最佳聚类数量。
 
     轮廓系数评估的是聚类的紧凑度和分离度，理论上能找到纯粹语义上的"最佳断点"。
     但在 RAG 场景中，该策略容易生成极其长或极其短的不均衡块，因此实际多采用固定大小预期来推导 K 值。
+
+    Args:
+        embeddings: 用于聚类的句子向量序列。
+        min_clusters: 候选聚类数量的下限。
+        max_clusters: 候选聚类数量的上限。
+
+    Returns:
+        轮廓系数最高的聚类数量；样本不足时返回样本数。
     """
     if len(embeddings) <= min_clusters:
         return len(embeddings)

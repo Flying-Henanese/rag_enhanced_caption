@@ -87,7 +87,7 @@ def test_context_expansion_pipeline_wraps_reranked_retriever() -> None:
     assert expanding.base_retriever is reranked
 
 
-def test_advanced_retrieval_pipeline_real_components():
+def test_advanced_retrieval_pipeline_real_components() -> None:
     if not os.getenv("EMBEDDING_API_KEY"):
         pytest.skip("EMBEDDING_API_KEY is not configured.")
 

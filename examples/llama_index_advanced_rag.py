@@ -41,6 +41,16 @@ logger.add(sys.stderr, level="WARNING")
 
 
 class SiliconFlowRerank(BaseNodePostprocessor):
+    """Rerank retrieved nodes through the SiliconFlow rerank API.
+
+    Args:
+        api_key: SiliconFlow API key. Empty keys disable remote reranking.
+        endpoint: Rerank API endpoint.
+        model: Rerank model identifier.
+        top_n: Maximum number of reranked nodes to return.
+        timeout: Request timeout in seconds.
+    """
+
     api_key: str = Field(default="")
     endpoint: str = Field(default="https://api.siliconflow.cn/v1/rerank")
     model: str = Field(default="Pro/BAAI/bge-reranker-v2-m3")
@@ -187,16 +197,26 @@ def _resolve_parent_node_id(
 
 
 class RerankedRetriever(BaseRetriever):
-    """
-    包装检索器，在合并前执行精排。
+    """在上下文合并前执行可选精排。
+
     避免超大章节被精排模型截断。
+
+    Args:
+        base_retriever: 生成候选节点的基础检索器。
+        reranker: 可选的节点精排器。
     """
 
     def __init__(
         self,
         base_retriever: BaseRetriever,
         reranker: BaseNodePostprocessor | None,
-    ):
+    ) -> None:
+        """初始化精排检索器。
+
+        Args:
+            base_retriever: 生成候选节点的基础检索器。
+            reranker: 可选的节点精排器。
+        """
         self.base_retriever = base_retriever
         self.reranker = reranker
         super().__init__()
@@ -232,9 +252,15 @@ def _build_auto_merging_retriever(
     )
 
 
-def get_advanced_components():
-    """
-    基于生成好的 JSONL 构建 LlamaIndex 检索树。
+def get_advanced_components() -> tuple[
+    BaseRetriever,
+    AutoMergingRetriever,
+    BaseNodePostprocessor | None,
+]:
+    """基于生成好的 JSONL 构建 LlamaIndex 检索树。
+
+    Returns:
+        向量检索器、上下文自动合并检索器和可选的精排器。
     """
     docstore_nodes = {}
     path_nodes = {}
@@ -410,14 +436,25 @@ def get_advanced_components():
     return vector_retriever, auto_merging_retriever, reranker
 
 
-def print_box(title, content):
+def print_box(title: str, content: object) -> None:
+    """在终端中打印带标题的文本框。
+
+    Args:
+        title: 文本框标题。
+        content: 要显示的内容。
+    """
     print(f"\n┌── {title} {'─' * (60 - len(title))}")
     for line in str(content).split("\n"):
         print(f"│ {line[:90] + '...' if len(line) > 90 else line}")
     print(f"└{'─' * 64}")
 
 
-def run_narrative_evaluation(query: str):
+def run_narrative_evaluation(query: str) -> None:
+    """运行一个查询并打印高级检索结果。
+
+    Args:
+        query: 待评测的自然语言查询。
+    """
     print(
         "\n========================================================================================="
     )

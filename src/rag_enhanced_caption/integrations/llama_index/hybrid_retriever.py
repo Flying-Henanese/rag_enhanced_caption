@@ -12,7 +12,15 @@ from rag_enhanced_caption.lexical_search.fusion import reciprocal_rank_fusion
 
 
 class HybridRetriever(BaseRetriever):
-    """Fuse vector candidates with lexical owner-node matches using RRF."""
+    """Fuse vector candidates with lexical owner-node matches using RRF.
+
+    Args:
+        vector_retriever: Retriever that supplies vector-search candidates.
+        lexical_backend: Sparse backend that supplies lexical owner-node matches.
+        node_by_id: Mapping used to resolve lexical owner IDs to nodes.
+        lexical_top_k: Maximum lexical matches included in rank fusion.
+        fusion_constant: Reciprocal-rank-fusion smoothing constant.
+    """
 
     def __init__(
         self,
@@ -23,6 +31,15 @@ class HybridRetriever(BaseRetriever):
         lexical_top_k: int = 15,
         fusion_constant: int = 60,
     ) -> None:
+        """Initialize the hybrid retriever.
+
+        Args:
+            vector_retriever: Retriever that supplies vector-search candidates.
+            lexical_backend: Sparse backend that supplies lexical owner-node matches.
+            node_by_id: Mapping used to resolve lexical owner IDs to nodes.
+            lexical_top_k: Maximum lexical matches included in rank fusion.
+            fusion_constant: Reciprocal-rank-fusion smoothing constant.
+        """
         self._vector_retriever = vector_retriever
         self._lexical_backend = lexical_backend
         self._node_by_id = node_by_id

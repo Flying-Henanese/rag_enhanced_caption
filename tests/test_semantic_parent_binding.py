@@ -5,7 +5,7 @@
 from rag_enhanced_caption.chunker.parsers import semantic
 
 
-def test_image_and_table_bind_to_nearest_text_parent():
+def test_image_and_table_bind_to_nearest_text_parent() -> None:
     markdown_content = """
 ## 章节A
 这是第一段正文，用于作为图片和表格的父上下文。

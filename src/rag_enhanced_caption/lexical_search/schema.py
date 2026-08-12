@@ -27,12 +27,26 @@ class SearchableObject:
     schema_version: int = 1
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize this object into a JSON-compatible dictionary."""
+        """Serialize this object into a JSON-compatible dictionary.
+
+        Returns:
+            Dictionary containing every persisted searchable-object field.
+        """
         return asdict(self)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> SearchableObject:
-        """Validate and deserialize a searchable object dictionary."""
+        """Validate and deserialize a searchable object dictionary.
+
+        Args:
+            data: Dictionary containing persisted searchable-object fields.
+
+        Returns:
+            Validated searchable object.
+
+        Raises:
+            ValueError: If a required field is missing or empty.
+        """
         required = ("id", "owner_node_id", "searchable_text", "field_type")
         missing = [key for key in required if not str(data.get(key, "")).strip()]
         if missing:

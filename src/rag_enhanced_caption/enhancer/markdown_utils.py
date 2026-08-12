@@ -1,7 +1,16 @@
-def format_as_collapsible_block(vlm_result: dict) -> str:
-    """
-    将 VLM 的解析结果格式化为带有 XML 标签的 Markdown 折叠块。
+from typing import Any
+
+
+def format_as_collapsible_block(vlm_result: dict[str, Any]) -> str:
+    """将 VLM 的解析结果格式化为带有 XML 标签的 Markdown 折叠块。
+
     专门为 LightRAG 实体提取和人类舒适阅读设计。
+
+    Args:
+        vlm_result: VLM 解析结果，包含成功标记、增强描述和实体信息。
+
+    Returns:
+        格式化后的 Markdown 折叠块；解析未成功时返回空字符串。
     """
     if not vlm_result.get("success"):
         return ""

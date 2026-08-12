@@ -14,6 +14,11 @@ class MarkdownContextExtractor:
     """
 
     def __init__(self, max_chars: int = 200) -> None:
+        """初始化 Markdown 语境提取器。
+
+        Args:
+            max_chars: 返回语境的目标最大字符数。
+        """
         self.md = MarkdownIt("commonmark").enable("table")
         self.max_chars = max_chars
 

@@ -31,6 +31,12 @@ class MarkdownMultimodalProcessor:
         vlm_func: VlmCall,
         max_concurrency: int = 5,
     ) -> None:
+        """初始化 Markdown 多模态处理器。
+
+        Args:
+            vlm_func: 异步 VLM 调用函数。
+            max_concurrency: VLM 请求的最大并发数。
+        """
         self.vlm_func = vlm_func
         self.semaphore = asyncio.Semaphore(max_concurrency)
 

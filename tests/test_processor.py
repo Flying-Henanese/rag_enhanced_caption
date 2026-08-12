@@ -48,13 +48,13 @@ def test_short_parent_id_injects_parent_context_into_table_prompt() -> None:
     assert enriched_chunks[1]["text_for_embedding"] == "表格摘要"
 
 
-def test_vlm_table_summarization():
+def test_vlm_table_summarization() -> None:
     """
     Test using REAL VLM to generate high-density summaries for tables.
     Verifies that the prompt successfully extracts entities and doesn't output filenames or noise.
     """
 
-    async def run_test():
+    async def run_test() -> None:
         if not os.getenv("VLM_API_KEY"):
             pytest.skip("No VLM_API_KEY configured.")
 

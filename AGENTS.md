@@ -12,7 +12,7 @@ This document provides foundational guidance and architectural mandates for the 
 
 ## 🛠 Coding Conventions
 
-- **Linting & Formatting**: Default to using `ruff`. Run `ruff check .` and `ruff format .` after making significant code changes. Ruff enforces modern typing syntax and the standard-library `logging` import ban project-wide. Explicit function annotations are enforced for the core package; examples and tests remain gradual-adoption areas for annotation completeness.
+- **Linting & Formatting**: Default to using `ruff`. Run `ruff check .` and `ruff format .` after making significant code changes. Ruff enforces explicit function annotations, modern typing syntax, and the standard-library `logging` import ban project-wide.
 - **Naming & Logging**: 
   - The main package name is `rag_enhanced_caption`.
   - Use `loguru` for all logging (`from loguru import logger`). Do not use the standard `logging` library.

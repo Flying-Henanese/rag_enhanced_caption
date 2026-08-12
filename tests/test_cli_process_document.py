@@ -1,15 +1,23 @@
 import asyncio
+from collections.abc import Awaitable, Callable
 import json
+from pathlib import Path
+from typing import Any
+
+import pytest
 
 from rag_enhanced_caption import cli
+from rag_enhanced_caption.enhancer.vlm_client import VlmCall
 
 
-def test_process_document_uses_enrich_chunks_and_completes(tmp_path, monkeypatch):
+def test_process_document_uses_enrich_chunks_and_completes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     input_md = tmp_path / "sample.md"
     output_dir = tmp_path / "out"
     input_md.write_text("# Title\n\nSome text.\n", encoding="utf-8")
 
-    def fake_chunk_markdown(**kwargs):
+    def fake_chunk_markdown(**kwargs: Any) -> list[dict[str, Any]]:
         return [
             {
                 "id": "chunk_1",
@@ -20,15 +28,20 @@ def test_process_document_uses_enrich_chunks_and_completes(tmp_path, monkeypatch
             }
         ]
 
-    async def fake_vlm(*args, **kwargs):
+    async def fake_vlm(*args: object, **kwargs: object) -> str:
         return '{"summary":"ok","entities":[]}'
 
     class FakeProcessor:
-        def __init__(self, vlm_func, max_concurrency=5):
+        def __init__(self, vlm_func: VlmCall, max_concurrency: int = 5) -> None:
             self.vlm_func = vlm_func
             self.max_concurrency = max_concurrency
 
-        async def enrich_chunks(self, chunks, image_resolver=None, base_dir="."):
+        async def enrich_chunks(
+            self,
+            chunks: list[dict[str, Any]],
+            image_resolver: Callable[[str], Awaitable[bytes | None]] | None = None,
+            base_dir: str | Path = ".",
+        ) -> list[dict[str, Any]]:
             for chunk in chunks:
                 chunk["text_for_embedding"] = chunk["content"]
             return chunks

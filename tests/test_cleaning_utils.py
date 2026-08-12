@@ -16,7 +16,7 @@ from rag_enhanced_caption.enhancer.cleaning_utils import (
 )
 
 
-def test_clean_html_for_llm():
+def test_clean_html_for_llm() -> None:
     # 测试 1: 带有样式的表格、注释、h标签
     html_content = """
     <!-- 这是一个无用的注释 -->
@@ -49,7 +49,7 @@ def test_clean_html_for_llm():
     assert "<h3>" not in cleaned
 
 
-def test_clean_markdown_styles():
+def test_clean_markdown_styles() -> None:
     # 测试 2: 带有 style 块的 Markdown 和 Base64
     md_with_style = """
     <style>
@@ -68,7 +68,7 @@ def test_clean_markdown_styles():
     assert "[BASE64_IMAGE_OMITTED]" in cleaned_md
 
 
-def test_compress_and_relink_chunks():
+def test_compress_and_relink_chunks() -> None:
     # 测试 3: 空块过滤、指针跳跃继承、孤岛图片类型纠正
     raw_chunks = [
         {

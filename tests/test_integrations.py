@@ -12,7 +12,7 @@ from llama_index.core import Document as LlamaDocument
 from langchain_core.documents import Document as LangchainDocument
 
 
-def test_ecosystem_integrations():
+def test_ecosystem_integrations() -> None:
     # Use the existing docstore file from test_resource
     test_file_path = "test_resource/高性能文档解析方案 2e2848cda67f8020abf0d58252a28708_docstore.jsonl"
 

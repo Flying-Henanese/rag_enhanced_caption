@@ -281,6 +281,16 @@ def chunk_markdown(
     parser_config: dict[str, Any] | None = None,
     embed_fn: Any | None = None,
 ) -> list[SemanticChunk]:
+    """将 Markdown 内容解析并切分为带层级上下文的语义块。
+
+    Args:
+        markdown_content: 待解析的 Markdown 文本。
+        parser_config: 可选解析配置；``chunk_token_num`` 控制分块长度上限。
+        embed_fn: 可选向量函数，用于超长纯文本的语义聚类切分。
+
+    Returns:
+        保留标题路径、元素类型和父子关联的语义块列表。
+    """
     parser_config = parser_config or {}
     max_length = int(parser_config.get("chunk_token_num", 512))
     logger.info(

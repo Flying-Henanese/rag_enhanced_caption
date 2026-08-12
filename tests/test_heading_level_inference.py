@@ -2,7 +2,7 @@ from rag_enhanced_caption.chunker import semantic_chunk_markdown_strings
 from rag_enhanced_caption.chunker.parsers import semantic
 
 
-def test_numbered_heading_recovers_hierarchy_in_header_path():
+def test_numbered_heading_recovers_hierarchy_in_header_path() -> None:
     md = """# 5.5.5 Third Level
 
 Body under mis-leveled heading.
@@ -19,7 +19,7 @@ Body under mis-leveled heading.
     assert text_chunks[0].metadata.get("heading_level") == 3
 
 
-def test_numbered_heading_recovers_markdown_output_level():
+def test_numbered_heading_recovers_markdown_output_level() -> None:
     md = """# 5.5.5 Third Level
 
 Body under mis-leveled heading.

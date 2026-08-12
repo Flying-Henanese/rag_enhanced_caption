@@ -1,6 +1,7 @@
 import importlib.util
 import os
 from pathlib import Path
+from typing import Any, NoReturn
 
 import dotenv
 import pytest
@@ -21,10 +22,12 @@ spec.loader.exec_module(advanced_rag)
 SiliconFlowRerank = advanced_rag.SiliconFlowRerank
 
 
-def test_siliconflow_rerank_warns_and_falls_back_on_timeout(monkeypatch):
+def test_siliconflow_rerank_warns_and_falls_back_on_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     warnings = []
 
-    def raise_timeout(*args, **kwargs):
+    def raise_timeout(*args: object, **kwargs: Any) -> NoReturn:
         assert kwargs["timeout"] == 30.0
         raise requests.Timeout("request timed out")
 
@@ -42,7 +45,7 @@ def test_siliconflow_rerank_warns_and_falls_back_on_timeout(monkeypatch):
     assert warnings == ["Rerank request timed out after 30.0 seconds"]
 
 
-def test_siliconflow_rerank_real_api():
+def test_siliconflow_rerank_real_api() -> None:
     api_key = os.getenv("RERANK_API_KEY")
     if not api_key:
         pytest.skip("RERANK_API_KEY is not configured.")
@@ -68,7 +71,7 @@ def test_siliconflow_rerank_real_api():
     assert new_nodes[0].score > 0
 
 
-def test_siliconflow_rerank_empty_nodes():
+def test_siliconflow_rerank_empty_nodes() -> None:
     api_key = os.getenv("RERANK_API_KEY")
     if not api_key:
         pytest.skip("RERANK_API_KEY is not configured.")

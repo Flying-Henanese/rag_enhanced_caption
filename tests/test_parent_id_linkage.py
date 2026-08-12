@@ -18,7 +18,7 @@ from rag_enhanced_caption.cli import _build_record
 from rag_enhanced_caption.enhancer.processor import MarkdownMultimodalProcessor
 
 
-def test_build_record_child_parent_id_resolves_to_real_parent_id():
+def test_build_record_child_parent_id_resolves_to_real_parent_id() -> None:
     parent = {
         "id": "doc_chunk_0",
         "content": "parent text body",
@@ -49,7 +49,7 @@ def test_build_record_child_parent_id_resolves_to_real_parent_id():
     assert child_doc["metadata"]["chunk_index"] == 1
 
 
-def test_build_record_text_chunk_has_no_parent():
+def test_build_record_text_chunk_has_no_parent() -> None:
     text_chunk = {
         "id": "doc_chunk_0",
         "content": "body",
@@ -64,10 +64,15 @@ def test_build_record_text_chunk_has_no_parent():
     assert idx["parent_id"] is None
 
 
-def test_enrich_chunks_finds_parent_context_via_chunk_index_key():
-    captured_prompts = []
+def test_enrich_chunks_finds_parent_context_via_chunk_index_key() -> None:
+    captured_prompts: list[str] = []
 
-    async def fake_vlm(user_prompt, system_prompt, image_base64=None, image_bytes=None):
+    async def fake_vlm(
+        user_prompt: str,
+        system_prompt: str,
+        image_base64: str | None = None,
+        image_bytes: bytes | None = None,
+    ) -> str:
         captured_prompts.append(user_prompt)
         return '{"summary": "S", "entities": []}'
 

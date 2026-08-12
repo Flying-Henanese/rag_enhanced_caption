@@ -111,9 +111,11 @@ def chunk_markdown(
         filename: 原始文档名称。
         parser_config: 配置参数字典，如 {"chunk_token_num": 512} 用于控制最大分块大小。
         embed_fn: 传入的向量化函数（用于后续的文本向量聚类）。不传会自动加载默认客户端。
+        output_format: 输出结构；``records`` 返回记录字典，``markdown`` 返回文本块。
 
     Returns:
-        一系列经过清洗、封装、带有完整上下文路径和元素类型的结构化记录字典。
+        ``records`` 模式返回带完整上下文路径和元素类型的记录字典；
+        ``markdown`` 模式返回格式化后的 Markdown 文本块。
     """
     semantic_chunks = semantic.chunk_markdown(markdown_content, parser_config, embed_fn)
     if output_format == "markdown":

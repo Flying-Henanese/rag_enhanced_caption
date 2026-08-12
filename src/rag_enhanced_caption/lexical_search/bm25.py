@@ -24,7 +24,13 @@ _TOKEN_RE = re.compile(
 
 @dataclass(frozen=True)
 class SparseSearchResult:
-    """A lexical match mapped back to an owning retrieval node."""
+    """A lexical match mapped back to an owning retrieval node.
+
+    Args:
+        owner_node_id: Identifier of the retrieval node that owns the match.
+        object_id: Identifier of the matched searchable object.
+        score: Sparse retrieval score for the match.
+    """
 
     owner_node_id: str
     object_id: str
@@ -35,11 +41,26 @@ class SparseSearchBackend(Protocol):
     """Search boundary for local BM25 and future remote backends."""
 
     def search(self, query: str, top_k: int = 10) -> list[SparseSearchResult]:
-        """Return ranked owner nodes for a lexical query."""
+        """Return ranked owner nodes for a lexical query.
+
+        Args:
+            query: Lexical query text.
+            top_k: Maximum number of ranked matches to return.
+
+        Returns:
+            Ranked sparse-search matches.
+        """
 
 
 def tokenize_lexical_text(text: str) -> list[str]:
-    """Tokenize identifiers and Chinese text without model dependencies."""
+    """Tokenize identifiers and Chinese text without model dependencies.
+
+    Args:
+        text: Text to normalize and tokenize.
+
+    Returns:
+        Normalized lexical tokens, including Chinese characters and bigrams.
+    """
     normalized = unicodedata.normalize("NFKC", text).lower()
     tokens: list[str] = []
     for match in _TOKEN_RE.finditer(normalized):
@@ -53,7 +74,13 @@ def tokenize_lexical_text(text: str) -> list[str]:
 
 
 class InMemoryBM25Backend:
-    """BM25 Okapi index built from persisted searchable objects."""
+    """BM25 Okapi index built from persisted searchable objects.
+
+    Args:
+        objects: Searchable objects used to build the in-memory index.
+        k1: BM25 term-frequency saturation parameter.
+        b: BM25 document-length normalization parameter.
+    """
 
     def __init__(
         self,
@@ -62,6 +89,13 @@ class InMemoryBM25Backend:
         k1: float = 1.5,
         b: float = 0.75,
     ) -> None:
+        """Initialize an in-memory BM25 index.
+
+        Args:
+            objects: Searchable objects used to build the in-memory index.
+            k1: BM25 term-frequency saturation parameter.
+            b: BM25 document-length normalization parameter.
+        """
         self._objects = list(objects)
         self._k1 = k1
         self._b = b
@@ -84,7 +118,15 @@ class InMemoryBM25Backend:
         }
 
     def search(self, query: str, top_k: int = 10) -> list[SparseSearchResult]:
-        """Rank objects with BM25 and deduplicate them by owner node."""
+        """Rank objects with BM25 and deduplicate them by owner node.
+
+        Args:
+            query: Lexical query text.
+            top_k: Maximum number of owner-node matches to return.
+
+        Returns:
+            BM25 matches sorted by descending score.
+        """
         if top_k <= 0 or not self._objects:
             return []
         query_terms = tokenize_lexical_text(query)

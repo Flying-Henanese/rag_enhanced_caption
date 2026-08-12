@@ -115,9 +115,15 @@ def clean_html_for_llm(html_content: str) -> str:
 
 
 def clean_markdown_styles(md_content: str) -> str:
-    """
-    清理 Markdown 中的 HTML 样式块和冗余的编码数据。
+    """清理 Markdown 中的 HTML 样式块和冗余的编码数据。
+
     例如移除 <style> 块、替换 Base64 图片编码为占位符等。
+
+    Args:
+        md_content: 待清理的 Markdown 内容。
+
+    Returns:
+        清理样式块、Base64 图片数据和冗余 HTML 后的 Markdown 内容。
     """
     # 移除 <style>...</style> 块
     md_content = re.sub(r"<style.*?>.*?</style>", "", md_content, flags=re.DOTALL)

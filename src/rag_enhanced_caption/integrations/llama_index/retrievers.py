@@ -17,7 +17,22 @@ from llama_index.core.utils import get_tokenizer
 
 
 class ShortContextExpandingRetriever(BaseRetriever):
-    """Expand short reranked paragraph hits with document-order neighbors."""
+    """Expand short reranked paragraph hits with document-order neighbors.
+
+    Args:
+        base_retriever: Retriever that returns reranked anchor nodes.
+        docstore: Store containing nodes referenced by document-order links.
+        token_count_fn: Function returning the token count for node text.
+        short_node_token_threshold: Expand anchors shorter than this count.
+        previous_nodes: Maximum previous-node hops per anchor.
+        next_nodes: Maximum next-node hops per anchor.
+        max_added_nodes: Maximum neighbors added across one retrieval.
+        max_expansion_tokens: Maximum total tokens in added neighbors.
+        score_decay: Multiplicative score decay applied per relationship hop.
+        same_section: Whether expansion must remain in the anchor section.
+        section_metadata_key: Metadata key containing section identity.
+        eligible_node_types: Metadata ``type`` values eligible as anchors.
+    """
 
     def __init__(
         self,
