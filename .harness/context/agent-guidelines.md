@@ -10,9 +10,10 @@ the authoritative source when details conflict.
 - Use `uv` for all dependency management and environment orchestration.
 - Run Python commands through `uv run`.
 - Use `ruff` for linting and formatting.
-- Ruff enforces explicit function annotations and modern typing syntax for the
-  core package. Examples and tests remain gradual-adoption areas for these
-  typing rules. The standard-library `logging` import ban applies project-wide.
+- Ruff enforces modern typing syntax and the standard-library `logging` import
+  ban project-wide. Explicit function annotations are enforced for the core
+  package; examples and tests remain gradual-adoption areas for annotation
+  completeness.
 - Keep demo and integration dependencies out of core dependencies. Use optional
   groups for packages such as `llama-index-core`.
 

@@ -2,7 +2,6 @@ import json
 import os
 import sys
 import requests
-from typing import List, Optional
 from pydantic import Field
 from pathlib import Path
 from loguru import logger
@@ -50,9 +49,9 @@ class SiliconFlowRerank(BaseNodePostprocessor):
 
     def _postprocess_nodes(
         self,
-        nodes: List[NodeWithScore],
-        query_bundle: Optional[QueryBundle] = None,
-    ) -> List[NodeWithScore]:
+        nodes: list[NodeWithScore],
+        query_bundle: QueryBundle | None = None,
+    ) -> list[NodeWithScore]:
         if query_bundle is None or not nodes or not self.api_key:
             return nodes
 
@@ -150,7 +149,7 @@ def build_candidate_retriever(
     )
 
 
-def _link_content_nodes_in_order(nodes: List[TextNode]) -> None:
+def _link_content_nodes_in_order(nodes: list[TextNode]) -> None:
     """Link consecutive content nodes when they share a section path."""
     for previous, current in zip(nodes, nodes[1:]):
         if previous.metadata.get("section_path") != current.metadata.get(
@@ -194,13 +193,15 @@ class RerankedRetriever(BaseRetriever):
     """
 
     def __init__(
-        self, base_retriever: BaseRetriever, reranker: Optional[BaseNodePostprocessor]
+        self,
+        base_retriever: BaseRetriever,
+        reranker: BaseNodePostprocessor | None,
     ):
         self.base_retriever = base_retriever
         self.reranker = reranker
         super().__init__()
 
-    def _retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
+    def _retrieve(self, query_bundle: QueryBundle) -> list[NodeWithScore]:
         nodes = self.base_retriever.retrieve(query_bundle)
         if self.reranker and nodes:
             nodes = self.reranker.postprocess_nodes(nodes, query_bundle)

@@ -3,14 +3,13 @@
 import argparse
 import asyncio
 import base64
+from collections.abc import Mapping
 import os
 import re
 import shutil
 import tempfile
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Mapping
-
 import httpx
 from dotenv import load_dotenv
 from loguru import logger
