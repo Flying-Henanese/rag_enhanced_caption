@@ -48,6 +48,38 @@ def test_short_parent_id_injects_parent_context_into_table_prompt() -> None:
     assert enriched_chunks[1]["text_for_embedding"] == "表格摘要"
 
 
+def test_textual_lists_and_unknown_types_keep_retrieval_text() -> None:
+    """Non-VLM elements must never leave an empty embedding record."""
+
+    async def unused_vlm(*args: object) -> str:
+        raise AssertionError("Textual and unknown elements must not call the VLM.")
+
+    chunks = [
+        {
+            "id": "sample_chunk_0",
+            "content": "- first\n- second",
+            "metadata": {"element_type": "bullet_list_open", "parent_id": None},
+        },
+        {
+            "id": "sample_chunk_1",
+            "content": "1. first\n2. second",
+            "metadata": {"element_type": "ordered_list_open", "parent_id": None},
+        },
+        {
+            "id": "sample_chunk_2",
+            "content": "custom textual payload",
+            "metadata": {"element_type": "custom_block", "parent_id": None},
+        },
+    ]
+
+    processor = MarkdownMultimodalProcessor(vlm_func=unused_vlm)
+    enriched_chunks = asyncio.run(processor.enrich_chunks(chunks))
+
+    assert enriched_chunks[0]["text_for_embedding"] == "- first\n- second"
+    assert enriched_chunks[1]["text_for_embedding"] == "1. first\n2. second"
+    assert enriched_chunks[2]["text_for_embedding"] == "custom textual payload"
+
+
 def test_vlm_table_summarization() -> None:
     """
     Test using REAL VLM to generate high-density summaries for tables.

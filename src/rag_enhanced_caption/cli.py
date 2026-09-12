@@ -16,14 +16,12 @@ from rag_enhanced_caption.enhancer.vlm_client import create_default_vlm_client
 from rag_enhanced_caption.chunker.dispatcher import (
     chunk_markdown as semantic_chunk_with_metadata,
 )
+from rag_enhanced_caption.chunker.schema import is_textual_element_type
 
 # --- 环境配置 ---
 # 优先加载当前运行目录下的 .env，其次加载脚本所在目录的 .env
 load_dotenv(dotenv_path=Path.cwd() / ".env")
 load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env")
-
-# 文本类元素类型(其余如 Image / Table / Table KV / html_block 视为多模态)
-_TEXT_ELEMENT_TYPES = {"text", "", None}
 
 
 def _build_record(
@@ -48,7 +46,7 @@ def _build_record(
     meta = chunk.get("metadata", {}) or {}
     element_type = meta.get("element_type", "text")
 
-    is_multimodal = element_type not in _TEXT_ELEMENT_TYPES
+    is_multimodal = not is_textual_element_type(element_type)
     rec_type = "child" if is_multimodal else "parent"
     rec_id = f"{'c_' if is_multimodal else 'p_'}{base_id}"
 

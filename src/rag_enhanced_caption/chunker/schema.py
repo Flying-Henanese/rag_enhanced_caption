@@ -6,6 +6,23 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
+TEXTUAL_ELEMENT_TYPES: frozenset[str | None] = frozenset(
+    {"text", "", None, "bullet_list_open", "ordered_list_open"}
+)
+
+
+def is_textual_element_type(element_type: str | None) -> bool:
+    """Return whether an element should participate in ordinary text retrieval.
+
+    Args:
+        element_type: Parser element type stored on a semantic chunk.
+
+    Returns:
+        ``True`` for prose and structural list chunks.
+    """
+    return element_type in TEXTUAL_ELEMENT_TYPES
+
+
 @dataclass
 class SemanticChunk:
     """Represent one structure-aware Markdown chunk.

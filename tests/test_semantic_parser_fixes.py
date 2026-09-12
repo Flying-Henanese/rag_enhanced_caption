@@ -49,6 +49,34 @@ def test_nested_list_duplication_fix() -> None:
     )
 
 
+def test_list_chunk_is_a_textual_anchor_for_following_elements() -> None:
+    """Lists should not inherit a parent and can contextualize later media."""
+    markdown_content = """
+# Section
+
+Intro paragraph.
+
+- first item
+- second item
+
+![diagram](diagram.png)
+"""
+
+    chunks = semantic.chunk_markdown(
+        markdown_content, embed_fn=lambda texts: [0.0] * len(texts)
+    )
+    list_index = next(
+        index
+        for index, chunk in enumerate(chunks)
+        if chunk.element_type == "bullet_list_open"
+    )
+    list_chunk = chunks[list_index]
+    image_chunk = next(chunk for chunk in chunks if chunk.element_type == "Image")
+
+    assert list_chunk.parent_id is None
+    assert image_chunk.parent_id == str(list_index)
+
+
 def test_html_block_summary_context_fix() -> None:
     """
     测试点：html_block 中的 <summary> 能够被正确提取为虚拟标题，

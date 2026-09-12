@@ -25,7 +25,14 @@ def test_process_document_uses_enrich_chunks_and_completes(
                 "file_id": "sample",
                 "filename": "sample.md",
                 "metadata": {"element_type": "text"},
-            }
+            },
+            {
+                "id": "chunk_2",
+                "content": "1. first\n2. second",
+                "file_id": "sample",
+                "filename": "sample.md",
+                "metadata": {"element_type": "ordered_list_open"},
+            },
         ]
 
     async def fake_vlm(*args: object, **kwargs: object) -> str:
@@ -61,7 +68,36 @@ def test_process_document_uses_enrich_chunks_and_completes(
     assert enhanced_md_path.exists()
 
     index_lines = index_path.read_text(encoding="utf-8").strip().splitlines()
-    assert len(index_lines) >= 1
-    first = json.loads(index_lines[0])
+    assert len(index_lines) == 2
+    index_records = [json.loads(line) for line in index_lines]
+    first = index_records[0]
     assert first["id"].startswith("p_")
     assert first["metadata"]["type"] == "parent"
+    assert first["text_for_embedding"] == "# Title\n\nSome text.\n"
+    assert all(record["text_for_embedding"] for record in index_records)
+    assert all(record["metadata"]["type"] == "parent" for record in index_records)
+
+    docstore_lines = docstore_path.read_text(encoding="utf-8").strip().splitlines()
+    assert len(docstore_lines) == len(index_lines)
+    docstore_records = [json.loads(line) for line in docstore_lines]
+    first_docstore = docstore_records[0]
+    assert first_docstore["id"] == first["id"]
+    assert {record["id"] for record in index_records} == {
+        record["id"] for record in docstore_records
+    }
+    assert {
+        "id",
+        "type",
+        "parent_id",
+        "text_for_embedding",
+        "full_content",
+        "header_path",
+        "element_type",
+        "entities",
+        "metadata",
+    } <= first_docstore.keys()
+
+    enhanced_markdown = enhanced_md_path.read_text(encoding="utf-8")
+    assert enhanced_markdown == (
+        "# Title\n\nSome text.\n\n\n---\n\n1. first\n2. second\n\n---\n\n"
+    )

@@ -126,11 +126,12 @@ async def process_document(
         for chunk in enriched_chunks:
             # Index 仅仅存储专供向量搜索的高浓度纯文本或 VLM 摘要
             # 因为已经提前清洗过，这里的 text_for_embedding 不会再受 HTML 干扰
+            text_for_embedding = chunk.get("text_for_embedding") or chunk["content"]
             f_idx.write(
                 json.dumps(
                     {
                         "id": chunk["id"],
-                        "text_for_embedding": chunk["text_for_embedding"],
+                        "text_for_embedding": text_for_embedding,
                         "metadata": {"element_type": chunk["metadata"]["element_type"]},
                     },
                     ensure_ascii=False,

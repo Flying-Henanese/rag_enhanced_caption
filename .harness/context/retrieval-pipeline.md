@@ -37,6 +37,9 @@ mechanisms. Keep their boundaries clear:
 
 - Vector recall: retrieves semantically similar `TextNode` or `IndexNode`
   candidates from `VectorStoreIndex` using `text_for_embedding`.
+- Textual structural chunks such as Markdown bullet and ordered lists remain
+  ordinary text nodes. Their `text_for_embedding` must fall back to their
+  cleaned content and must never be persisted as an empty string.
 - BM25 recall: retrieves literal matches from `*_sparse.jsonl` searchable
   objects. This is useful for table rows, headers, IDs, dates, emails, product
   names, and exact terms that semantic summaries may weaken.
@@ -50,7 +53,8 @@ mechanisms. Keep their boundaries clear:
 - Recursive retrieval: follows `IndexNode.index_id` from embedding-facing
   multimodal nodes to full content nodes.
 - Rerank: optionally reorders candidate nodes before broader context expansion.
-  Missing rerank credentials should not break retrieval.
+  Missing rerank credentials should not break retrieval. Remote reranking uses
+  the asynchronous postprocessor path and `httpx.AsyncClient`.
 - Short-context expansion: query-time expansion only. After rerank,
   `ShortContextExpandingRetriever` expands short eligible chunk hits by
   following same-section `PREVIOUS` and `NEXT` relationships. The example
@@ -123,13 +127,18 @@ Retrieval-time expansion depends on relationship metadata:
   vector retrieval.
 
 When changing chunking or artifact schemas, verify these relationships still
-exist before evaluating retrieval quality.
+exist before evaluating retrieval quality. Also verify that every vector index
+record has non-empty `text_for_embedding` and a matching docstore ID.
 
 ## Fallback Behavior
 
 If the sparse JSONL file does not exist or contains no usable searchable
 objects, the advanced example should degrade to pure vector retrieval instead
 of failing the whole retrieval flow.
+
+The example executes the query pipeline with `aretrieve`; vector retrieval,
+recursive resolution, reranking, short-context expansion, and AutoMerge all
+provide an asynchronous path.
 
 ## Validation Dataset
 

@@ -1,3 +1,5 @@
+import asyncio
+
 from llama_index.core.retrievers import BaseRetriever
 from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
 
@@ -52,3 +54,10 @@ def test_hybrid_retriever_fuses_vector_and_lexical_nodes() -> None:
         "lexical-only",
     ]
     assert all(result.score is not None for result in results)
+
+    async_results = asyncio.run(retriever.aretrieve("MiniRAG"))
+    assert [result.node.node_id for result in async_results] == [
+        "shared",
+        "vector-only",
+        "lexical-only",
+    ]

@@ -87,6 +87,22 @@ class ShortContextExpandingRetriever(BaseRetriever):
 
     def _retrieve(self, query_bundle: QueryBundle) -> list[NodeWithScore]:
         anchors = self.base_retriever.retrieve(query_bundle)
+        return self._expand_anchors(anchors)
+
+    async def _aretrieve(self, query_bundle: QueryBundle) -> list[NodeWithScore]:
+        """Retrieve anchors asynchronously before expanding nearby context.
+
+        Args:
+            query_bundle: Query passed to the wrapped retriever.
+
+        Returns:
+            Reranked anchors plus structurally valid neighboring nodes.
+        """
+        anchors = await self.base_retriever.aretrieve(query_bundle)
+        return self._expand_anchors(anchors)
+
+    def _expand_anchors(self, anchors: list[NodeWithScore]) -> list[NodeWithScore]:
+        """Expand already-retrieved anchors with eligible neighbors."""
         results = list(anchors)
         known_node_ids = {result.node.node_id for result in results}
         added_nodes = 0

@@ -49,9 +49,25 @@ class HybridRetriever(BaseRetriever):
 
     def _retrieve(self, query_bundle: QueryBundle) -> list[NodeWithScore]:
         vector_nodes = self._vector_retriever.retrieve(query_bundle)
-        lexical_results = self._lexical_backend.search(
-            query_bundle.query_str, top_k=self._lexical_top_k
-        )
+        return self._fuse_candidates(vector_nodes, query_bundle.query_str)
+
+    async def _aretrieve(self, query_bundle: QueryBundle) -> list[NodeWithScore]:
+        """Retrieve and fuse candidates without blocking vector retrieval.
+
+        Args:
+            query_bundle: Query passed to both retrieval paths.
+
+        Returns:
+            Vector and lexical candidates ordered by fused RRF score.
+        """
+        vector_nodes = await self._vector_retriever.aretrieve(query_bundle)
+        return self._fuse_candidates(vector_nodes, query_bundle.query_str)
+
+    def _fuse_candidates(
+        self, vector_nodes: list[NodeWithScore], query: str
+    ) -> list[NodeWithScore]:
+        """Fuse retrieved vector nodes with in-memory lexical matches."""
+        lexical_results = self._lexical_backend.search(query, top_k=self._lexical_top_k)
         vector_ids = [node.node.node_id for node in vector_nodes]
         lexical_ids = [result.owner_node_id for result in lexical_results]
         fused = reciprocal_rank_fusion(

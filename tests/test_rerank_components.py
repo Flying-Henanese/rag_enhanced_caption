@@ -1,11 +1,12 @@
+import asyncio
 import importlib.util
 import os
 from pathlib import Path
 from typing import Any, NoReturn
 
 import dotenv
+import httpx
 import pytest
-import requests
 from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
 
 
@@ -22,16 +23,44 @@ spec.loader.exec_module(advanced_rag)
 SiliconFlowRerank = advanced_rag.SiliconFlowRerank
 
 
-def test_siliconflow_rerank_warns_and_falls_back_on_timeout(
+def test_siliconflow_rerank_logs_and_falls_back_on_timeout(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    warnings = []
+    exceptions: list[str] = []
 
-    def raise_timeout(*args: object, **kwargs: Any) -> NoReturn:
-        assert kwargs["timeout"] == 30.0
-        raise requests.Timeout("request timed out")
+    class TimeoutClient:
+        def __init__(self, **kwargs: Any) -> None:
+            assert kwargs["timeout"] == 30.0
 
-    monkeypatch.setattr(advanced_rag.requests, "post", raise_timeout)
+        async def __aenter__(self) -> "TimeoutClient":
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            return None
+
+        async def post(self, *args: object, **kwargs: Any) -> NoReturn:
+            raise httpx.TimeoutException("request timed out")
+
+    monkeypatch.setattr(advanced_rag.httpx, "AsyncClient", TimeoutClient)
+    monkeypatch.setattr(advanced_rag.logger, "exception", exceptions.append)
+    reranker = SiliconFlowRerank(api_key="test-key", top_n=1)
+    nodes = [
+        NodeWithScore(node=TextNode(text="first"), score=1.0),
+        NodeWithScore(node=TextNode(text="second"), score=0.5),
+    ]
+
+    result = asyncio.run(
+        reranker._apostprocess_nodes(nodes, QueryBundle(query_str="query"))
+    )
+
+    assert result == nodes[:1]
+    assert exceptions == ["Rerank request timed out after 30.0 seconds"]
+
+
+def test_siliconflow_rerank_sync_path_falls_back_without_network(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    warnings: list[str] = []
     monkeypatch.setattr(advanced_rag.logger, "warning", warnings.append)
     reranker = SiliconFlowRerank(api_key="test-key", top_n=1)
     nodes = [
@@ -42,7 +71,10 @@ def test_siliconflow_rerank_warns_and_falls_back_on_timeout(
     result = reranker._postprocess_nodes(nodes, QueryBundle(query_str="query"))
 
     assert result == nodes[:1]
-    assert warnings == ["Rerank request timed out after 30.0 seconds"]
+    assert warnings == [
+        "Remote reranking requires apostprocess_nodes(); returning "
+        "unreranked candidates on the synchronous path."
+    ]
 
 
 def test_siliconflow_rerank_real_api() -> None:
@@ -63,7 +95,7 @@ def test_siliconflow_rerank_real_api() -> None:
     ]
     query_bundle = QueryBundle(query_str="法国的首都是什么？")
 
-    new_nodes = reranker._postprocess_nodes(nodes, query_bundle)
+    new_nodes = asyncio.run(reranker._apostprocess_nodes(nodes, query_bundle))
 
     assert len(new_nodes) == 1
     assert "巴黎" in new_nodes[0].node.text
@@ -79,5 +111,5 @@ def test_siliconflow_rerank_empty_nodes() -> None:
     reranker = SiliconFlowRerank(api_key=api_key, top_n=2)
     query_bundle = QueryBundle(query_str="test query")
 
-    new_nodes = reranker._postprocess_nodes([], query_bundle)
+    new_nodes = asyncio.run(reranker._apostprocess_nodes([], query_bundle))
     assert new_nodes == []

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from llama_index.core import StorageContext
 from llama_index.core.retrievers import AutoMergingRetriever, BaseRetriever
 from llama_index.core.schema import (
@@ -74,6 +76,13 @@ def test_short_anchor_adds_previous_and_next_with_decayed_scores() -> None:
     assert by_id["anchor"].score == 0.8
     assert by_id["previous"].score == 0.4
     assert by_id["next"].score == 0.4
+
+    async_results = asyncio.run(retriever.aretrieve("测试问题"))
+    assert {result.node.node_id for result in async_results} == {
+        "previous",
+        "anchor",
+        "next",
+    }
 
 
 def test_long_anchor_is_not_expanded() -> None:

@@ -18,7 +18,7 @@ from mdit_py_plugins.dollarmath import dollarmath_plugin
 
 from ..nlp import count_tokens
 from ..embed_client import get_default_embedding_client
-from ..schema import SemanticChunk
+from ..schema import SemanticChunk, is_textual_element_type
 
 from ..utils.md_parser_utils import (
     extract_table_block,
@@ -108,18 +108,19 @@ def _flush_content(
     heading_level = max((idx + 1 for idx, t in enumerate(title_stack) if t), default=0)
     # 规范化元素类型，确保其符合预期值
     element_type = _normalize_special_element(special_element)
+    is_textual = is_textual_element_type(element_type)
 
     # 建立父子关联：非文本块（如图片/表格）会尝试寻找并记录上一个文本块的 ID 作为其 parent_id
     # 避免其失去语境，成为孤儿
     parent_id = (
         str(state["last_text_idx"])
-        if element_type != "text" and state["last_text_idx"] != -1
+        if not is_textual and state["last_text_idx"] != -1
         else None
     )
 
     # 情况 A: 特殊元素块（如 Image, Table）且不允许进一步切分
     # 这类块通常需要保持原子性，即使长度稍长也会作为一个整体，以便 VLM 完整理解。
-    if element_type != "text" and not allow_split:
+    if not is_textual and not allow_split:
         chunk = SemanticChunk(
             content=content,
             full_content=content,
@@ -150,7 +151,7 @@ def _flush_content(
                 )
                 result.append(chunk)
                 # 记录最后一个生成的文本块索引，供后续特殊元素（如图片）作为父节点使用
-                if element_type == "text":
+                if is_textual:
                     state["last_text_idx"] = len(result) - 1
         # 长度适中，直接封装
         else:
@@ -163,7 +164,7 @@ def _flush_content(
                 metadata={"heading_level": heading_level},
             )
             result.append(chunk)
-            if element_type == "text":
+            if is_textual:
                 state["last_text_idx"] = len(result) - 1
 
     current_content.clear()

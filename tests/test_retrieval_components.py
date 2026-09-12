@@ -1,11 +1,20 @@
+import asyncio
 import importlib.util
+import json
 import os
 from pathlib import Path
 
 import dotenv
 import pytest
 from llama_index.core import StorageContext
-from llama_index.core.schema import TextNode
+from llama_index.core.retrievers import BaseRetriever
+from llama_index.core.schema import (
+    BaseNode,
+    IndexNode,
+    NodeWithScore,
+    QueryBundle,
+    TextNode,
+)
 from llama_index.core.storage.docstore import SimpleDocumentStore
 
 from rag_enhanced_caption.integrations.llama_index import (
@@ -87,6 +96,88 @@ def test_context_expansion_pipeline_wraps_reranked_retriever() -> None:
     assert expanding.base_retriever is reranked
 
 
+def test_advanced_components_map_list_records_to_text_nodes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    index_path = tmp_path / "sample_index_new.jsonl"
+    docstore_path = tmp_path / "sample_docstore_new.jsonl"
+    sparse_path = tmp_path / "sample_sparse.jsonl"
+    index_path.write_text(
+        json.dumps(
+            {
+                "id": "sample_chunk_0",
+                "text_for_embedding": "",
+                "metadata": {"element_type": "ordered_list_open"},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    docstore_path.write_text(
+        json.dumps(
+            {
+                "id": "sample_chunk_0",
+                "full_content": "1. first\n2. second",
+                "parent_id": None,
+                "header_path": [],
+                "element_type": "ordered_list_open",
+                "entities": [],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    captured_nodes: list[BaseNode] = []
+
+    class EmptyRetriever(BaseRetriever):
+        def _retrieve(self, query_bundle: QueryBundle) -> list[NodeWithScore]:
+            return []
+
+    class FakeVectorStoreIndex:
+        def __init__(
+            self, nodes: list[BaseNode], storage_context: StorageContext
+        ) -> None:
+            captured_nodes.extend(nodes)
+
+        def as_retriever(self, similarity_top_k: int) -> BaseRetriever:
+            return EmptyRetriever()
+
+    monkeypatch.setattr(advanced_rag, "INDEX_PATH", index_path)
+    monkeypatch.setattr(advanced_rag, "DOCSTORE_PATH", docstore_path)
+    monkeypatch.setattr(advanced_rag, "SPARSE_PATH", sparse_path)
+    monkeypatch.setattr(advanced_rag, "VectorStoreIndex", FakeVectorStoreIndex)
+    monkeypatch.delenv("RERANK_API_KEY", raising=False)
+
+    advanced_rag.get_advanced_components()
+
+    assert len(captured_nodes) == 1
+    assert isinstance(captured_nodes[0], TextNode)
+    assert captured_nodes[0].text == "1. first\n2. second"
+
+
+def test_async_recursive_retriever_resolves_index_node() -> None:
+    full_node = TextNode(id_="image_full", text="full image description")
+    index_node = IndexNode(
+        id_="image", text="image summary", index_id=full_node.node_id
+    )
+
+    class StaticRetriever(BaseRetriever):
+        def _retrieve(self, query_bundle: QueryBundle) -> list[NodeWithScore]:
+            return [NodeWithScore(node=index_node, score=0.8)]
+
+    retriever = advanced_rag.AsyncRecursiveRetriever(
+        "candidate",
+        retriever_dict={"candidate": StaticRetriever()},
+        node_dict={full_node.node_id: full_node},
+    )
+
+    results = asyncio.run(retriever.aretrieve("describe the image"))
+
+    assert len(results) == 1
+    assert results[0].node.node_id == full_node.node_id
+    assert results[0].score == 0.8
+
+
 def test_advanced_retrieval_pipeline_real_components() -> None:
     if not os.getenv("EMBEDDING_API_KEY"):
         pytest.skip("EMBEDDING_API_KEY is not configured.")
@@ -97,7 +188,7 @@ def test_advanced_retrieval_pipeline_real_components() -> None:
     _, auto_merging_retriever, _ = advanced_rag.get_advanced_components()
     query = "RAG-Anything 的架构图展示了哪些主要处理阶段？"
 
-    final_results = auto_merging_retriever.retrieve(query)
+    final_results = asyncio.run(auto_merging_retriever.aretrieve(query))
 
     assert len(final_results) > 0
     assert final_results[0].node is not None

@@ -8,8 +8,10 @@ improved.
 ## Artifact Checks
 
 - Confirm the expected input Markdown file.
-- Confirm `*_index_new.jsonl` exists and contains embedding-facing text.
+- Confirm `*_index_new.jsonl` exists and every row contains non-empty
+  embedding-facing text, including bullet and ordered list chunks.
 - Confirm `*_docstore_new.jsonl` exists and contains full content.
+- Confirm index and docstore IDs have a one-to-one mapping.
 - Confirm `*_sparse.jsonl` exists when testing BM25 behavior.
 - Check that sparse `owner_node_id` values map back to docstore/vector node IDs.
 
@@ -35,8 +37,9 @@ uv run python examples/llama_index_advanced_rag.py
 
 ```bash
 uv run pytest tests/test_lexical_search.py
+uv run pytest tests/test_example_lexical_pipeline.py
 uv run pytest tests/test_hybrid_retriever.py
 uv run pytest tests/test_context_expanding_retriever.py
 uv run pytest tests/test_retrieval_components.py
+uv run pytest tests/test_rerank_components.py
 ```
-

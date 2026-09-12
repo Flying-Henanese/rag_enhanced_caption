@@ -12,6 +12,7 @@ from .json_utils import robust_json_parse
 from .image_utils import create_image_resolver
 from .vlm_client import VlmCall, get_mime_type
 from . import prompts
+from rag_enhanced_caption.chunker.schema import is_textual_element_type
 from rag_enhanced_caption.chunker.utils.id_utils import resolve_parent_chunk_id
 
 
@@ -48,7 +49,7 @@ class MarkdownMultimodalProcessor:
     ) -> list[dict[str, Any]]:
         """批量增强语义块。
 
-        仅对 ``element_type`` 为 Table 或 Image 的子节点执行 VLM 分析。
+        文本和列表块直接使用自身内容；表格和图片块执行 VLM 分析。
 
         Args:
             chunks: 待增强的语义块。
@@ -77,7 +78,7 @@ class MarkdownMultimodalProcessor:
             element_type = chunk["metadata"].get("element_type", "text")
 
             # 如果是文本块，它的 text_for_embedding 就是它自己的纯文本内容
-            if element_type == "text":
+            if is_textual_element_type(element_type):
                 chunk["text_for_embedding"] = chunk["content"]
                 continue
 
@@ -108,6 +109,10 @@ class MarkdownMultimodalProcessor:
 
             elif element_type == "Math Block":
                 # 公式可能不需要 VLM 增强，或者用特定的小模型。此处暂时保持原文。
+                chunk["text_for_embedding"] = chunk["content"]
+
+            else:
+                # 未识别的新元素类型也必须保留可检索文本，避免写出空向量记录。
                 chunk["text_for_embedding"] = chunk["content"]
 
         # 并发执行所有 VLM 请求

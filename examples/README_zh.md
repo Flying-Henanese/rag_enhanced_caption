@@ -360,7 +360,7 @@ output/paddleocr_sparse.jsonl
 如果要扩展成问答系统，需要在：
 
 ```python
-final_results = adv_auto_merging_retriever.retrieve(query)
+final_results = await adv_auto_merging_retriever.aretrieve(query)
 ```
 
 之后，把召回结果拼接为上下文，再调用 LLM 生成答案。

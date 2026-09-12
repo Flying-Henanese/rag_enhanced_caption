@@ -64,6 +64,27 @@ def test_build_record_text_chunk_has_no_parent() -> None:
     assert idx["parent_id"] is None
 
 
+def test_build_record_list_chunk_uses_text_record_namespace() -> None:
+    list_chunk = {
+        "id": "doc_chunk_0",
+        "content": "- first\n- second",
+        "file_id": "doc",
+        "filename": "doc.md",
+        "text_for_embedding": "- first\n- second",
+        "metadata": {
+            "element_type": "bullet_list_open",
+            "parent_id": None,
+            "chunk_index": 0,
+        },
+    }
+
+    idx, doc = _build_record(list_chunk, Path("doc.md"))
+
+    assert idx["id"] == "p_doc_chunk_0"
+    assert idx["metadata"]["type"] == "parent"
+    assert doc["type"] == "parent"
+
+
 def test_enrich_chunks_finds_parent_context_via_chunk_index_key() -> None:
     captured_prompts: list[str] = []
 
