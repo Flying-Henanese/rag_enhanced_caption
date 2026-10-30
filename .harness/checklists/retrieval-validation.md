@@ -14,6 +14,12 @@ improved.
 - Confirm index and docstore IDs have a one-to-one mapping.
 - Confirm `*_sparse.jsonl` exists when testing BM25 behavior.
 - Check that sparse `owner_node_id` values map back to docstore/vector node IDs.
+- Resolve stored parent IDs to actual records; advanced-example short IDs and
+  base-CLI fully qualified IDs use different namespaces.
+- Check VLM logs and summary text separately from file existence. Record
+  authentication errors, raw-table fallback, and image placeholders explicitly.
+- Compare generated summaries with source `full_content` for unsupported claims;
+  successful authentication and JSON parsing are not faithfulness checks.
 
 ## Pipeline Checks
 
@@ -24,7 +30,22 @@ improved.
 - Verify rerank behavior when rerank credentials are configured.
 - Verify short-context expansion adds only structurally valid neighbors.
 - Verify `AutoMergingRetriever` still handles parent-child aggregation.
+- Verify every replacing parent contains its own original content and all
+  descendant evidence, even when merging stops at an intermediate text parent.
+- Check final context for overlapping ancestor/descendant results and repeated
+  passages, separately from checking for evidence loss.
 - Verify sparse-missing fallback degrades to vector-only retrieval.
+
+## Evidence and Claim Boundaries
+
+- Separate persisted JSONL content from runtime full-parent context snapshots.
+- Record whether VLM, embeddings, and reranking are live, disabled, or mocked.
+- Attribute improvements to the first stage where the relevant evidence changes.
+  Do not credit short-context expansion for evidence already present before it.
+- Check exact alarm identifiers as well as answer fields; matching a field value
+  from a similar alarm does not establish a correct source match.
+- Report structural validation separately from semantic recall and answer
+  accuracy. Rerun the actual benchmark before updating accuracy claims.
 
 ## Recommended Full Flow
 

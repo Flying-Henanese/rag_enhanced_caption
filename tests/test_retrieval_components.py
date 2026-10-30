@@ -178,6 +178,107 @@ def test_async_recursive_retriever_resolves_index_node() -> None:
     assert results[0].score == 0.8
 
 
+@pytest.mark.parametrize(
+    ("element_type", "anchor_id", "sibling_count"),
+    [
+        ("bullet_list_open", "sample_chunk_19", 0),
+        ("ordered_list_open", "sample_chunk_19", 0),
+        ("Table", "sample_chunk_19", 0),
+        ("Image", "sample_chunk_19", 0),
+        ("Table", "sample_chunk_20", 2),
+        ("Image", "sample_chunk_20", 2),
+    ],
+)
+def test_automerge_preserves_expanded_descendant_content(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    element_type: str,
+    anchor_id: str,
+    sibling_count: int,
+) -> None:
+    people = ["设计人员", "调试人员", "机床操作人员", "维修和维护人员"]
+    lead = "该手册供以下人员使用："
+    records = [
+        {
+            "id": "sample_chunk_19",
+            "full_content": lead,
+            "parent_id": None,
+            "header_path": ["前言", "目标使用人群"],
+            "element_type": "text",
+        },
+        {
+            "id": "sample_chunk_20",
+            "full_content": "\n".join(f"- {person}" for person in people),
+            "parent_id": "19",
+            "header_path": ["前言", "目标使用人群"],
+            "element_type": element_type,
+        },
+    ]
+    for number in range(sibling_count):
+        records.append(
+            {
+                "id": f"sample_chunk_{21 + number}",
+                "full_content": f"其他段落 {number}",
+                "parent_id": None,
+                "header_path": ["前言", "目标使用人群"],
+                "element_type": "text",
+            }
+        )
+    docstore_path = tmp_path / "docstore.jsonl"
+    index_path = tmp_path / "index.jsonl"
+    docstore_path.write_text(
+        "\n".join(json.dumps(record) for record in records), encoding="utf-8"
+    )
+    index_path.write_text(
+        "\n".join(
+            json.dumps({"id": record["id"], "text_for_embedding": "目标使用人群摘要"})
+            for record in records
+        ),
+        encoding="utf-8",
+    )
+
+    class AnchorRetriever(BaseRetriever):
+        def __init__(self, anchor: BaseNode) -> None:
+            self.anchor = anchor
+            super().__init__()
+
+        def _retrieve(self, query_bundle: QueryBundle) -> list[NodeWithScore]:
+            return [NodeWithScore(node=self.anchor, score=0.9)]
+
+    embedding_texts: list[str] = []
+
+    class FakeVectorStoreIndex:
+        def __init__(
+            self, nodes: list[BaseNode], storage_context: StorageContext
+        ) -> None:
+            embedding_texts.extend(node.text for node in nodes)
+            self.anchor = next(node for node in nodes if node.id_ == anchor_id)
+            storage_context.docstore.add_documents(nodes)
+
+        def as_retriever(self, similarity_top_k: int) -> BaseRetriever:
+            return AnchorRetriever(self.anchor)
+
+    monkeypatch.setattr(advanced_rag, "INDEX_PATH", index_path)
+    monkeypatch.setattr(advanced_rag, "DOCSTORE_PATH", docstore_path)
+    monkeypatch.setattr(advanced_rag, "SPARSE_PATH", tmp_path / "missing_sparse.jsonl")
+    monkeypatch.setattr(advanced_rag, "VectorStoreIndex", FakeVectorStoreIndex)
+    monkeypatch.delenv("RERANK_API_KEY", raising=False)
+
+    _, auto_merging, _ = advanced_rag.get_advanced_components()
+    results = asyncio.run(auto_merging.aretrieve("手册面向哪些人员？"))
+
+    assert len(results) == 1
+    if sibling_count:
+        assert results[0].node.node_id == "sample_chunk_19"
+    else:
+        assert results[0].node.node_id.startswith("path_")
+    context = results[0].node.text
+    assert lead in context
+    for person in people:
+        assert context.count(person) == 1
+    assert set(embedding_texts) == {"目标使用人群摘要"}
+
+
 def test_advanced_retrieval_pipeline_real_components() -> None:
     if not os.getenv("EMBEDDING_API_KEY"):
         pytest.skip("EMBEDDING_API_KEY is not configured.")

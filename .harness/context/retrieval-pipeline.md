@@ -61,7 +61,12 @@ mechanisms. Keep their boundaries clear:
   expands up to one previous and one next node, with `max_added_nodes=2` and
   `max_expansion_tokens=512`.
 - AutoMerge: uses parent-child relationships to merge a sufficient set of child
-  hits into broader parent context.
+  hits into broader parent context. The advanced example builds full-content
+  copies of all parent nodes, including content parents with image/table
+  descendants, before allowing them to replace children. Descendant content is
+  collected in child order; embedding-facing leaf text stays unchanged. Parent
+  copies are restored to the docstore after vector-index construction, which
+  can otherwise overwrite them with embedding-facing leaf nodes.
 
 The safest mental model is:
 
@@ -98,6 +103,13 @@ retrievers = mapping, ranking, and expansion logic
   expansion limits.
 - If the result is too narrow despite several child hits under the same parent,
   inspect AutoMerge parent-child relationships and merge threshold.
+- If expanded evidence disappears after AutoMerge, inspect the replacement
+  parent's actual text and full-content metadata, including non-section
+  intermediate parents. Structural ancestry alone does not prove content
+  coverage.
+- If final context repeats the same passage, check whether an ancestor and
+  its descendant are both returned. Complete parent content does not by itself
+  guarantee non-overlapping final results.
 - If retrieval only works when `*_sparse.jsonl` exists, verify vector-only
   fallback behavior.
 
@@ -141,6 +153,12 @@ recursive resolution, reranking, short-context expansion, and AutoMerge all
 provide an asynchronous path.
 
 ## Validation Dataset
+
+For the 2026-10-30 Markdown/artifact checks, successful live VLM retry, and
+remaining summary-faithfulness and context-overlap observations, see
+[`../runs/2026-10-30-markdown-artifact-validation.md`](../runs/2026-10-30-markdown-artifact-validation.md).
+This record distinguishes local structural checks from live service and
+answer-quality evaluation; it is not a rerun of the historical 828D benchmark.
 
 Use `test_resource/rag-anything.md` when validating the full hybrid retrieval
 flow because the advanced example expects these artifacts:

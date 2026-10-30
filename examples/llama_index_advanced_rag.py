@@ -13,6 +13,7 @@ from llama_index.core.schema import (
     BaseNode,
     TextNode,
     IndexNode,
+    MetadataMode,
     NodeWithScore,
     QueryBundle,
     NodeRelationship,
@@ -343,6 +344,44 @@ def _build_auto_merging_retriever(
     )
 
 
+def _build_parent_context_nodes(nodes: dict[str, BaseNode]) -> list[BaseNode]:
+    """Build full-content parent copies without changing embedding nodes.
+
+    Args:
+        nodes: Complete node tree, including sections and content elements.
+
+    Returns:
+        Parent copies whose text and full-content metadata include their own
+        original content and every descendant in child order. Input nodes keep
+        their embedding-facing text unchanged.
+    """
+    parents: list[BaseNode] = []
+
+    def collect_content(node: BaseNode) -> str:
+        own_content = node.metadata.get("full_content")
+        if own_content is None:
+            own_content = node.get_content(metadata_mode=MetadataMode.NONE)
+        parts = [own_content] if own_content else []
+        for child in node.child_nodes or []:
+            parts.append(collect_content(nodes[child.node_id]))
+        content = "\n\n".join(parts)
+        if node.child_nodes:
+            parents.append(
+                node.model_copy(
+                    update={
+                        "text": content,
+                        "metadata": {**node.metadata, "full_content": content},
+                    }
+                )
+            )
+        return content
+
+    for node in nodes.values():
+        if node.parent_node is None:
+            collect_content(node)
+    return parents
+
+
 def get_advanced_components() -> tuple[
     BaseRetriever,
     AutoMergingRetriever,
@@ -471,27 +510,16 @@ def get_advanced_components() -> tuple[
 
     _link_content_nodes_in_order(content_nodes_in_order)
 
-    # c. 聚合章节文本
-    sorted_paths = sorted(
-        list(path_nodes.keys()), key=lambda x: len(x.split("|")), reverse=True
-    )
-    for path in sorted_paths:
-        node_id = path_nodes[path]
-        node = docstore_nodes[node_id]
-        child_texts = []
-        for child_info in node.relationships.get(NodeRelationship.CHILD, []):
-            child_node = docstore_nodes[child_info.node_id]
-            child_texts.append(child_node.metadata.get("full_content", child_node.text))
-        node.text = f"【章节聚合：{path.split('|')[-1]}】\n\n" + "\n\n".join(
-            child_texts
-        )
-        node.metadata["full_content"] = node.text
+    # c. 所有可用于替换子节点的父节点都必须包含完整后代正文。
+    parent_context_nodes = _build_parent_context_nodes(docstore_nodes)
 
     docstore = SimpleDocumentStore()
     docstore.add_documents(list(docstore_nodes.values()))
     storage_context = StorageContext.from_defaults(docstore=docstore)
 
     vector_index = VectorStoreIndex(leaf_nodes, storage_context=storage_context)
+    # 建索引可能把 leaf_nodes 写回 docstore；随后恢复完整父正文，保持向量摘要独立。
+    storage_context.docstore.add_documents(parent_context_nodes)
     vector_retriever = vector_index.as_retriever(similarity_top_k=15)
     candidate_retriever = build_candidate_retriever(
         vector_retriever, leaf_nodes, SPARSE_PATH

@@ -145,6 +145,24 @@ Docstore invariants:
   for answer context and inspection. In the advanced example these fields live
   in separate index and docstore rows; the base CLI also repeats
   `text_for_embedding` in its docstore row.
+- Persisted docstore rows retain each chunk's own content; a parent reference
+  does not mean that the row's `full_content` already includes its descendants.
+  The advanced retrieval example builds complete parent-context copies in
+  memory when constructing the retrieval tree. These copies do not rewrite
+  the source JSONL. Inspect both persisted rows and runtime parent text when
+  checking whether AutoMerge can safely replace children.
+
+## Enrichment Validation Boundaries
+
+Artifact creation and non-empty `text_for_embedding` do not prove that VLM
+enrichment succeeded. Table enrichment can fall back to truncated source text,
+and images can fall back to placeholders. Check the enrichment logs and actual
+record content before describing these outputs as generated summaries.
+
+A successful VLM call also does not prove summary faithfulness. Compare
+generated claims with the source `full_content`, especially for alarm reactions,
+acknowledgment conditions, parameter limits, and operating instructions. Keep
+unsupported interpretation separate from directly stated source facts.
 
 ## Sparse JSONL
 
